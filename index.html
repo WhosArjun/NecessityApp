@@ -180,10 +180,10 @@
   /* ---------- NAV ---------- */
   #view-nav{background:#0b0c10;}
   #map{position:absolute; inset:0; z-index:0;}
-  .nav-top{position:absolute; top:0; left:0; right:0; z-index:5; padding:16px 16px 0; display:flex; flex-direction:column; gap:10px;}
+  .nav-top{position:absolute; top:0; left:0; right:0; z-index:5; padding:16px 16px 0; display:flex; flex-direction:column; gap:8px;}
   .nav-search{
     display:flex; align-items:center; gap:10px; padding:6px 8px 6px 16px; border-radius:999px;
-    background:rgba(255,255,255,.9); border:1px solid rgba(0,0,0,.06); box-shadow:0 8px 24px rgba(0,0,0,.18);
+    background:rgba(255,255,255,.94); border:1px solid rgba(0,0,0,.06); box-shadow:0 8px 24px rgba(0,0,0,.18);
   }
   .nav-search input{flex:1; border:0; outline:none; font-size:15px; background:transparent; padding:8px 0; color:#1B1F2A;}
   .nav-search input::placeholder{color:#8b93a1;}
@@ -192,6 +192,16 @@
     display:flex; align-items:center; justify-content:center; flex:0 0 auto;
   }
   .nav-search button svg{width:16px; height:16px;}
+  .nav-search .dot{width:8px; height:8px; border-radius:50%; flex:0 0 auto; margin-left:4px;}
+  .nav-banner{
+    background:rgba(27,31,42,.92); color:#fff; font-size:12.5px; line-height:1.4;
+    padding:10px 14px; border-radius:14px; display:none; box-shadow:0 8px 20px rgba(0,0,0,.2);
+  }
+  .nav-banner.show{display:block;}
+  .nav-banner button{
+    margin-top:6px; border:0; background:rgba(255,255,255,.16); color:#fff; font-size:12px; font-weight:700;
+    padding:6px 12px; border-radius:999px;
+  }
   .nav-back{
     position:absolute; top:16px; left:16px; z-index:6; width:40px; height:40px; border-radius:50%;
     background:rgba(255,255,255,.9); border:0; display:flex; align-items:center; justify-content:center;
@@ -300,6 +310,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div class="nav-top">
+        <div class="nav-banner" id="navBanner"></div>
+        <div class="nav-search">
+          <span class="dot" style="background:#3B82F6;"></span>
+          <input id="originInput" type="text" placeholder="Your location" autocomplete="off">
+        </div>
         <div class="nav-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
           <input id="destInput" type="text" placeholder="Search a destination" autocomplete="off">
@@ -468,6 +483,13 @@
   document.getElementById('weatherBack').addEventListener('click', ()=> showView('home'));
   document.getElementById('navBack').addEventListener('click', ()=> showView('home'));
 
+  /* ---------------- WEATHER STATE ---------------- */
+  const weatherState = {loaded:false, loading:false, unit:'f', lat:null, lon:null, data:null, place:'Your Location'};
+  // Default unit by locale
+  try{
+    if(!/en-US/i.test(navigator.language||'')) weatherState.unit = 'c';
+  }catch(e){}
+
   /* ---------------- HOME GREETING / CLOCK ---------------- */
   function updateClockAndGreeting(){
     const now = new Date();
@@ -487,13 +509,6 @@
   updateClockAndGreeting();
   setInterval(updateClockAndGreeting, 30000);
 
-  /* ---------------- WEATHER STATE ---------------- */
-  const weatherState = {loaded:false, loading:false, unit:'f', lat:null, lon:null, data:null, place:'Your Location'};
-  // Default unit by locale
-  try{
-    if(!/en-US/i.test(navigator.language||'')) weatherState.unit = 'c';
-  }catch(e){}
-
   document.getElementById('unitToggle').addEventListener('click', (e)=>{
     const b = e.target.closest('button'); if(!b) return;
     const unit = b.dataset.unit;
@@ -503,6 +518,16 @@
     if(weatherState.lat!=null) fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
   });
   document.querySelectorAll('#unitToggle button').forEach(x=>x.classList.toggle('active', x.dataset.unit===weatherState.unit));
+
+  // Human-readable message for a GeolocationPositionError, since sandboxed
+  // previews (like an in-chat artifact frame) commonly block geolocation
+  // outright — code 1 fires immediately with no browser prompt at all.
+  function geoErrorMessage(err){
+    if(err && err.code === 1) return "This preview isn't allowed to ask for your location.";
+    if(err && err.code === 2) return "Your location couldn't be determined.";
+    if(err && err.code === 3) return "Finding your location took too long.";
+    return "Couldn't get your location.";
+  }
 
   function initWeather(){
     weatherState.loading = true;
@@ -523,8 +548,8 @@
           fetchWeather(weatherState.lat, weatherState.lon, name);
         });
       },
-      err => { showWeatherManualSearch("Location access was denied."); },
-      {timeout:10000, maximumAge:300000}
+      err => { showWeatherManualSearch(geoErrorMessage(err)); },
+      {timeout:8000, maximumAge:300000}
     );
   }
 
@@ -539,16 +564,19 @@
           <button class="btn" id="citySearchGo">Search</button>
           <button class="btn" id="tryLocationAgain">Use my location</button>
         </div>
+        <p id="citySearchError" style="color:#B84B4B; font-size:12.5px; min-height:16px;"></p>
       </div>`;
     document.getElementById('tryLocationAgain').addEventListener('click', initWeather);
     const go = ()=>{
       const q = document.getElementById('citySearch').value.trim();
+      const errEl = document.getElementById('citySearchError');
       if(!q) return;
+      errEl.textContent = 'Searching…';
       geocodeCity(q).then(res=>{
-        if(!res){ showWeatherManualSearch("Couldn't find that place."); return; }
+        if(!res){ if(errEl) errEl.textContent = "Couldn't find that place. Try “City, State/Country”."; return; }
         weatherState.lat = res.lat; weatherState.lon = res.lon; weatherState.place = res.name;
         fetchWeather(res.lat, res.lon, res.name);
-      });
+      }).catch(()=>{ if(errEl) errEl.textContent = 'Search failed — check your connection and try again.'; });
     };
     document.getElementById('citySearchGo').addEventListener('click', go);
     document.getElementById('citySearch').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
@@ -562,13 +590,17 @@
       return a.city || a.town || a.village || a.county || a.state || 'Your Location';
     }catch(e){ return 'Your Location'; }
   }
+  // Open-Meteo's own geocoder: reliable CORS, no key, no user-agent policy —
+  // used instead of Nominatim search, which can be rate-limited or blocked
+  // from sandboxed origins.
   async function geocodeCity(q){
-    try{
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
-      const j = await r.json();
-      if(!j.length) return null;
-      return {lat:parseFloat(j[0].lat), lon:parseFloat(j[0].lon), name:j[0].display_name.split(',').slice(0,2).join(',')};
-    }catch(e){ return null; }
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
+    if(!r.ok) throw new Error('geocoding request failed');
+    const j = await r.json();
+    if(!j.results || !j.results.length) return null;
+    const res = j.results[0];
+    const parts = [res.name, res.admin1, res.country].filter(Boolean);
+    return {lat:res.latitude, lon:res.longitude, name:parts.slice(0,2).join(', ')};
   }
 
   function cToF(c){ return c*9/5+32; }
@@ -752,29 +784,51 @@
     });
   }
 
+  function showNavBanner(html){
+    const el = document.getElementById('navBanner');
+    if(!html){ el.classList.remove('show'); el.innerHTML=''; return; }
+    el.innerHTML = html;
+    el.classList.add('show');
+  }
+
   function initMap(){
     map = L.map('map', {zoomControl:false, attributionControl:true}).setView(DEFAULT_CENTER, 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom:19, attribution:'© OpenStreetMap contributors'
     }).addTo(map);
     L.control.zoom({position:'bottomright'}).addTo(map);
+    locateUser({silentFail:true});
+  }
 
-    setNavStatus('Locating you…');
-    if(navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(
-        pos=>{
-          const ll = [pos.coords.latitude, pos.coords.longitude];
-          map.setView(ll, 14);
-          if(userMarker) map.removeLayer(userMarker);
-          userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map);
-          setNavStatus('');
-        },
-        err=>{ setNavStatus('Showing default location — enable location access for live GPS.'); },
-        {timeout:10000}
-      );
-    } else {
-      setNavStatus('Geolocation not supported in this browser.');
+  // Wrapped so both initMap() and the locate button reuse the same logic
+  // and the same clear messaging when the sandboxed preview blocks access.
+  function locateUser({silentFail=false} = {}){
+    if(!navigator.geolocation){
+      setNavStatus('');
+      showNavBanner('Geolocation isn\'t supported here. Type a starting point in "Your location" below.');
+      return;
     }
+    setNavStatus('Locating you…');
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        const ll = [pos.coords.latitude, pos.coords.longitude];
+        map.setView(ll, 14);
+        if(userMarker) map.removeLayer(userMarker);
+        userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map);
+        setNavStatus('');
+        showNavBanner('');
+      },
+      err=>{
+        setNavStatus('');
+        const msg = geoErrorMessage(err);
+        showNavBanner(`${msg} You can still type a starting point in "Your location" and a destination below.
+          <button id="navRetryLocate">Try again</button>`);
+        const retry = document.getElementById('navRetryLocate');
+        if(retry) retry.addEventListener('click', ()=> locateUser());
+        if(!silentFail){ /* banner already shown */ }
+      },
+      {timeout:8000}
+    );
   }
 
   function setNavStatus(msg){
@@ -784,57 +838,91 @@
     el.textContent = msg;
   }
 
-  document.getElementById('locateBtn').addEventListener('click', ()=>{
-    if(!navigator.geolocation) return;
-    setNavStatus('Locating you…');
-    navigator.geolocation.getCurrentPosition(pos=>{
-      const ll=[pos.coords.latitude, pos.coords.longitude];
-      map.setView(ll, 15);
-      if(userMarker) map.removeLayer(userMarker);
-      userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map);
-      setNavStatus('');
-    }, ()=> setNavStatus('Could not get your location.'));
-  });
+  document.getElementById('locateBtn').addEventListener('click', ()=> locateUser());
+
+  function haversineMiles(lat1, lon1, lat2, lon2){
+    const R = 3958.8, toRad = d=>d*Math.PI/180;
+    const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return R * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  async function resolveOrigin(){
+    const typed = document.getElementById('originInput').value.trim();
+    if(typed){
+      const res = await geocodeCity(typed);
+      if(res) return {lat:res.lat, lon:res.lon, name:res.name};
+      throw new Error('origin-not-found');
+    }
+    if(userMarker){ const ll = userMarker.getLatLng(); return {lat:ll.lat, lon:ll.lng, name:'Your location'}; }
+    return {lat:DEFAULT_CENTER[0], lon:DEFAULT_CENTER[1], name:'Default location'};
+  }
 
   async function routeTo(query){
     if(!query) return;
+    showNavBanner('');
+    setNavStatus('Finding your starting point…');
+    let origin, dest;
+    try{
+      origin = await resolveOrigin();
+    }catch(e){
+      setNavStatus('');
+      showNavBanner('Couldn\'t find that starting point. Try "City, State" or leave it blank to use your current location.');
+      return;
+    }
+
     setNavStatus('Searching…');
     try{
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-      const j = await r.json();
-      if(!j.length){ setNavStatus('No results for that place.'); return; }
-      const dest = {lat:parseFloat(j[0].lat), lon:parseFloat(j[0].lon), name:j[0].display_name.split(',').slice(0,2).join(',')};
+      dest = await geocodeCity(query);
+    }catch(e){
+      dest = null;
+    }
+    if(!dest){ setNavStatus(''); showNavBanner('No results for that destination. Try adding a city or state.'); return; }
 
-      const origin = userMarker ? userMarker.getLatLng() : L.latLng(DEFAULT_CENTER[0], DEFAULT_CENTER[1]);
+    if(userMarker) map.removeLayer(userMarker);
+    userMarker = L.marker([origin.lat, origin.lon], {icon:pulseDivIcon('#3B82F6')}).addTo(map);
+    if(destMarker) map.removeLayer(destMarker);
+    destMarker = L.marker([dest.lat, dest.lon], {icon:pinDivIcon('#E24A4A')}).addTo(map);
 
-      if(destMarker) map.removeLayer(destMarker);
-      destMarker = L.marker([dest.lat, dest.lon], {icon:pinDivIcon('#E24A4A')}).addTo(map);
-
-      setNavStatus('Getting directions…');
-      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+    setNavStatus('Getting directions…');
+    let route = null;
+    try{
+      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
       const rr = await fetch(rUrl);
-      const rj = await rr.json();
-      if(!rj.routes || !rj.routes.length){ setNavStatus("Couldn't find a driving route."); return; }
-      const route = rj.routes[0];
-      const latlngs = route.geometry.coordinates.map(c=>[c[1], c[0]]);
+      if(rr.ok){
+        const rj = await rr.json();
+        if(rj.routes && rj.routes.length) route = rj.routes[0];
+      }
+    }catch(e){ /* fall through to straight-line fallback below */ }
 
-      if(routeLine) map.removeLayer(routeLine);
+    if(routeLine) map.removeLayer(routeLine);
+
+    if(route){
+      const latlngs = route.geometry.coordinates.map(c=>[c[1], c[0]]);
       routeLine = L.polyline(latlngs, {color:'#3B82F6', weight:6, opacity:.9, lineJoin:'round'}).addTo(map);
       map.fitBounds(routeLine.getBounds(), {padding:[60,60]});
-
-      const miles = (route.distance/1609.34).toFixed(1);
-      const mins = Math.round(route.duration/60);
-      document.getElementById('sheetTitle').textContent = dest.name;
-      document.getElementById('sheetDist').textContent = miles;
-      document.getElementById('sheetTime').textContent = mins;
-      document.getElementById('navSheet').classList.add('show');
-      document.getElementById('openMaps').onclick = ()=>{
-        window.open(`https://www.openstreetmap.org/directions?from=${origin.lat}%2C${origin.lng}&to=${dest.lat}%2C${dest.lon}`, '_blank');
-      };
-      setNavStatus('');
-    }catch(e){
-      setNavStatus("Couldn't get directions right now.");
+      document.getElementById('sheetDist').textContent = (route.distance/1609.34).toFixed(1);
+      document.getElementById('sheetTime').textContent = Math.round(route.duration/60);
+      showNavBanner('');
+    } else {
+      // Live routing unavailable — fall back to a direct line so the
+      // feature still gives useful distance/direction information.
+      routeLine = L.polyline([[origin.lat, origin.lon],[dest.lat, dest.lon]], {
+        color:'#3B82F6', weight:4, opacity:.85, dashArray:'2 10', lineCap:'round'
+      }).addTo(map);
+      map.fitBounds(routeLine.getBounds(), {padding:[60,60]});
+      const miles = haversineMiles(origin.lat, origin.lon, dest.lat, dest.lon);
+      document.getElementById('sheetDist').textContent = miles.toFixed(1) + ' (direct)';
+      document.getElementById('sheetTime').textContent = '—';
+      showNavBanner('Live driving directions aren\'t reachable from this preview, so this shows a direct line and straight-line distance instead.');
     }
+
+    document.getElementById('sheetTitle').textContent = dest.name;
+    document.getElementById('navSheet').classList.add('show');
+    document.getElementById('openMaps').onclick = ()=>{
+      window.open(`https://www.openstreetmap.org/directions?from=${origin.lat}%2C${origin.lon}&to=${dest.lat}%2C${dest.lon}`, '_blank');
+    };
+    setNavStatus('');
   }
   document.getElementById('goBtn').addEventListener('click', ()=> routeTo(document.getElementById('destInput').value.trim()));
   document.getElementById('destInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(e.target.value.trim()); });
@@ -843,6 +931,7 @@
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
     document.getElementById('destInput').value='';
+    showNavBanner('');
   });
 
 })();
