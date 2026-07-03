@@ -205,7 +205,7 @@
     color:#1B1F2A; font-size:14px; text-align:left; width:100%; background:none; border-left:0; border-right:0; border-top:0;
   }
   .suggest-item:last-child{border-bottom:0;}
-  .suggest-item:hover, .suggest-item:focus-visible{background:rgba(59,130,246,.08);}
+  .suggest-item:hover, .suggest-item:focus-visible, .suggest-item.hi{background:rgba(59,130,246,.08);}
   .suggest-item svg{width:15px; height:15px; flex:0 0 auto; color:#8b93a1;}
   .suggest-item .s-main{font-weight:600;}
   .suggest-item .s-sub{color:#8b93a1; font-size:12.5px; margin-left:4px;}
@@ -258,6 +258,52 @@
     position:absolute; left:16px; bottom:20px; z-index:6; background:rgba(255,255,255,.92);
     padding:8px 14px; border-radius:999px; font-size:12.5px; color:#1B1F2A; box-shadow:0 6px 18px rgba(0,0,0,.15);
     max-width:70%;
+  }
+
+  /* ---------- IN-APP TURN-BY-TURN ---------- */
+  .tbt-overlay{
+    position:absolute; inset:0; z-index:20; background:#F5F6F8; display:none; flex-direction:column; color:#1B1F2A;
+  }
+  .tbt-overlay.show{display:flex;}
+  .tbt-header{
+    display:flex; align-items:center; gap:12px; padding:16px 18px 12px; background:#fff;
+    box-shadow:0 2px 10px rgba(0,0,0,.06); flex:0 0 auto;
+  }
+  .tbt-close{
+    width:36px; height:36px; border-radius:50%; border:0; background:#F0F1F4; color:#1B1F2A;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .tbt-close svg{width:16px; height:16px;}
+  .tbt-summary{font-size:13.5px; color:#6b7280; font-weight:600;}
+  .tbt-summary b{color:#1B1F2A; font-size:15px;}
+  .tbt-next{
+    margin:16px 18px 10px; background:#1B1F2A; color:#fff; border-radius:24px; padding:18px 20px;
+    display:flex; align-items:center; gap:16px; flex:0 0 auto;
+  }
+  .tbt-next-icon{
+    width:46px; height:46px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.14); border-radius:15px;
+  }
+  .tbt-next-icon svg{width:26px; height:26px;}
+  .tbt-next-dist{font-family:var(--font-display); font-size:23px; font-weight:500; line-height:1.1;}
+  .tbt-next-instr{font-size:13.5px; color:rgba(255,255,255,.78); margin-top:3px;}
+  .tbt-start-btn{
+    margin:2px 18px 12px; padding:14px; border-radius:16px; border:0; background:#3B82F6; color:#fff;
+    font-weight:700; font-size:15px; flex:0 0 auto;
+  }
+  .tbt-start-btn.active{background:#E24A4A;}
+  .tbt-steps{flex:1; overflow-y:auto; padding:4px 12px 30px;}
+  .tbt-step{display:flex; align-items:center; gap:14px; padding:13px 8px; border-bottom:1px solid #E9EBEF;}
+  .tbt-step.active{background:rgba(59,130,246,.08); border-radius:14px;}
+  .tbt-step-icon{
+    width:32px; height:32px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#1B1F2A;
+  }
+  .tbt-step-icon svg{width:20px; height:20px;}
+  .tbt-step-instr{font-size:14px; font-weight:600;}
+  .tbt-step-dist{font-size:12.5px; color:#8b93a1; margin-top:2px;}
+  .tbt-arrived{
+    margin:16px 18px; padding:16px 20px; border-radius:18px; background:rgba(59,130,246,.1);
+    color:#1B1F2A; font-weight:700; text-align:center;
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -368,8 +414,26 @@
         <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
           <button class="ghost" id="clearRoute">Clear</button>
-          <button class="primary" id="openMaps">Open turn-by-turn</button>
+          <button class="primary" id="startTbt">Turn-by-turn</button>
         </div>
+      </div>
+
+      <div class="tbt-overlay" id="tbtOverlay">
+        <div class="tbt-header">
+          <button class="tbt-close" id="tbtClose" aria-label="Close turn-by-turn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="tbt-summary"><b id="tbtDist">—</b> · <b id="tbtTime">—</b></div>
+        </div>
+        <div class="tbt-next" id="tbtNext">
+          <span class="tbt-next-icon" id="tbtNextIcon"></span>
+          <span>
+            <div class="tbt-next-dist" id="tbtNextDist">—</div>
+            <div class="tbt-next-instr" id="tbtNextInstr">—</div>
+          </span>
+        </div>
+        <button class="tbt-start-btn" id="tbtStartBtn">Start Navigation</button>
+        <div class="tbt-steps" id="tbtSteps"></div>
       </div>
     </section>
 
@@ -601,7 +665,7 @@
     document.getElementById('tryLocationAgain').addEventListener('click', initWeather);
     let citySelected = null;
     const cityInput = document.getElementById('citySearch');
-    attachAutocomplete(cityInput, document.getElementById('citySuggest'), sel=>{ citySelected = sel; });
+    attachAutocomplete(cityInput, document.getElementById('citySuggest'), sel=>{ citySelected = sel; }, ()=> go());
     const go = ()=>{
       const errEl = document.getElementById('citySearchError');
       if(citySelected){
@@ -619,7 +683,6 @@
       }).catch(()=>{ if(errEl) errEl.textContent = 'Search failed — check your connection and try again.'; });
     };
     document.getElementById('citySearchGo').addEventListener('click', go);
-    cityInput.addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
   }
 
   async function reverseGeocode(lat, lon){
@@ -685,11 +748,21 @@
   // Wires a text input to a live dropdown of place suggestions. onSelect is
   // called with the chosen place object, or null whenever the person edits
   // the text (so a stale selection can't silently be used for routing).
-  function attachAutocomplete(inputEl, listEl, onSelect){
-    let debounceTimer = null, reqId = 0;
-    function hide(){ listEl.classList.remove('show'); }
+  function attachAutocomplete(inputEl, listEl, onSelect, onSubmit){
+    let debounceTimer = null, reqId = 0, lastResults = [], highlighted = -1;
+    function hide(){ listEl.classList.remove('show'); highlighted = -1; }
+    function highlight(i){
+      listEl.querySelectorAll('.suggest-item').forEach((el,idx)=> el.classList.toggle('hi', idx===i));
+      highlighted = i;
+    }
+    function pick(r){
+      inputEl.value = r.short;
+      hide();
+      onSelect(r);
+    }
     function render(results, thisReq){
       if(thisReq !== reqId) return; // a newer keystroke already superseded this response
+      lastResults = results;
       if(!results.length){
         listEl.innerHTML = `<div class="suggest-empty">No matches yet — try a different spelling.</div>`;
         listEl.classList.add('show');
@@ -707,13 +780,16 @@
       listEl.classList.add('show');
       listEl.querySelectorAll('.suggest-item').forEach(btn=>{
         btn.addEventListener('click', ()=>{
-          const r = results[parseInt(btn.dataset.idx, 10)];
-          inputEl.value = r.short;
-          hide();
-          onSelect(r);
+          pick(results[parseInt(btn.dataset.idx, 10)]);
+          if(onSubmit) onSubmit();
         });
       });
     }
+    // A tap on the dropdown would otherwise blur the input first (hiding the
+    // list before its click fires), which is what let stale/ambiguous text
+    // slip through instead of the tapped suggestion. Blocking mousedown's
+    // default action keeps focus in place so the click always lands.
+    listEl.addEventListener('mousedown', e=> e.preventDefault());
     inputEl.addEventListener('input', ()=>{
       onSelect(null);
       const q = inputEl.value.trim();
@@ -724,6 +800,22 @@
         const {results} = await searchPlaces(q, 6);
         render(results, myReq);
       }, 300);
+    });
+    inputEl.addEventListener('keydown', e=>{
+      if(e.key === 'ArrowDown' && listEl.classList.contains('show')){ e.preventDefault(); highlight(Math.min(highlighted+1, lastResults.length-1)); return; }
+      if(e.key === 'ArrowUp' && listEl.classList.contains('show')){ e.preventDefault(); highlight(Math.max(highlighted-1, 0)); return; }
+      if(e.key === 'Escape'){ hide(); return; }
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        // Enter with an open list commits the highlighted (or top) match
+        // instead of whatever ambiguous text was typed.
+        if(listEl.classList.contains('show') && lastResults.length){
+          pick(lastResults[highlighted >= 0 ? highlighted : 0]);
+        } else {
+          hide();
+        }
+        if(onSubmit) onSubmit();
+      }
     });
     inputEl.addEventListener('focus', ()=>{ if(listEl.innerHTML) listEl.classList.add('show'); });
     inputEl.addEventListener('blur', ()=> setTimeout(hide, 150)); // let a click register first
@@ -926,8 +1018,8 @@
     L.control.zoom({position:'bottomright'}).addTo(map);
     locateUser({silentFail:true});
 
-    attachAutocomplete(document.getElementById('originInput'), document.getElementById('originSuggest'), sel=>{ originSelected = sel; });
-    attachAutocomplete(document.getElementById('destInput'), document.getElementById('destSuggest'), sel=>{ destSelected = sel; });
+    attachAutocomplete(document.getElementById('originInput'), document.getElementById('originSuggest'), sel=>{ originSelected = sel; }, ()=> routeTo());
+    attachAutocomplete(document.getElementById('destInput'), document.getElementById('destSuggest'), sel=>{ destSelected = sel; }, ()=> routeTo());
   }
 
   // Wrapped so both initMap() and the locate button reuse the same logic
@@ -1075,7 +1167,7 @@
     routesData = [];
     selectedRouteIdx = 0;
     try{
-      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true`;
+      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
       const rr = await fetch(rUrl);
       if(rr.ok){
         const rj = await rr.json();
@@ -1110,14 +1202,119 @@
 
     document.getElementById('sheetTitle').textContent = dest.name;
     document.getElementById('navSheet').classList.add('show');
-    document.getElementById('openMaps').onclick = ()=>{
-      window.open(`https://www.openstreetmap.org/directions?from=${origin.lat}%2C${origin.lon}&to=${dest.lat}%2C${dest.lon}`, '_blank');
-    };
     setNavStatus('');
   }
   document.getElementById('goBtn').addEventListener('click', routeTo);
-  document.getElementById('destInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(); });
-  document.getElementById('originInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(); });
+
+  /* ---------------- IN-APP TURN-BY-TURN ---------------- */
+  let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null;
+
+  function formatDist(m){
+    if(m == null) return '';
+    const miles = m/1609.34;
+    if(miles < 0.1) return Math.max(0, Math.round(m*3.28084)) + ' ft';
+    return miles.toFixed(1) + ' mi';
+  }
+  function maneuverIcon(type, modifier){
+    if(type === 'arrive'){
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.5 7-12a7 7 0 1 0-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>`;
+    }
+    if(type === 'depart'){
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/></svg>`;
+    }
+    if(['roundabout','rotary','roundabout turn','exit roundabout','exit rotary'].includes(type)){
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/><path d="M12 5v4M12 5l-2.4 2.4"/></svg>`;
+    }
+    const angles = {'sharp right':120,'right':90,'slight right':45,'straight':0,'slight left':-45,'left':-90,'sharp left':-120,'uturn':180};
+    const angle = angles[modifier] != null ? angles[modifier] : 0;
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(${angle}deg)"><path d="M12 19V5M12 5l-6 6M12 5l6 6"/></svg>`;
+  }
+  function describeStep(s){
+    const name = s.name ? ` onto ${s.name}` : '';
+    const t = s.maneuver.type, m = s.maneuver.modifier;
+    if(t === 'depart') return `Head out${name}`.trim();
+    if(t === 'arrive') return 'Arrive at your destination';
+    if(t === 'roundabout' || t === 'rotary') return `Enter the roundabout${s.maneuver.exit ? ', take exit '+s.maneuver.exit : ''}${name}`;
+    if(t === 'merge') return `Merge${m ? ' '+m : ''}${name}`;
+    if(t === 'fork') return `Keep ${m || 'straight'}${name}`;
+    if(t === 'end of road') return `Turn ${m || ''}${name}`.trim();
+    if(t === 'continue' || t === 'new name') return `Continue${name}`;
+    if(t === 'on ramp') return `Take the ramp${name}`;
+    if(t === 'off ramp') return `Take the exit${name}`;
+    const mod = m || 'straight';
+    if(mod === 'straight') return `Continue straight${name}`;
+    if(mod === 'uturn') return `Make a U-turn${name}`;
+    const verb = mod.includes('sharp') ? 'Sharp turn' : mod.includes('slight') ? 'Slight turn' : `Turn ${mod}`;
+    return `${verb}${name}`;
+  }
+  function renderTbtSteps(){
+    document.getElementById('tbtSteps').innerHTML = tbtSteps.map((s,i)=>`
+      <div class="tbt-step ${i===tbtCurrentIdx?'active':''}" data-i="${i}">
+        <span class="tbt-step-icon">${maneuverIcon(s.maneuver.type, s.maneuver.modifier)}</span>
+        <div><div class="tbt-step-instr">${escapeHtml(describeStep(s))}</div><div class="tbt-step-dist">${formatDist(s.distance)}</div></div>
+      </div>`).join('');
+  }
+  function updateTbtNext(){
+    const s = tbtSteps[tbtCurrentIdx];
+    if(!s) return;
+    document.getElementById('tbtNextIcon').innerHTML = maneuverIcon(s.maneuver.type, s.maneuver.modifier);
+    document.getElementById('tbtNextInstr').textContent = describeStep(s);
+    document.getElementById('tbtNextDist').textContent = formatDist(s.distance) || 'Now';
+  }
+  function openTurnByTurn(){
+    const route = routesData[selectedRouteIdx];
+    if(!route || !route.legs || !route.legs.length){
+      showNavBanner('Turn-by-turn needs live routing, which wasn\'t available for this trip.');
+      return;
+    }
+    tbtSteps = [].concat(...route.legs.map(l=> l.steps || []));
+    tbtCurrentIdx = 0;
+    document.getElementById('tbtDist').textContent = (route.distance/1609.34).toFixed(1) + ' mi';
+    document.getElementById('tbtTime').textContent = Math.round(route.duration/60) + ' min';
+    renderTbtSteps();
+    updateTbtNext();
+    document.getElementById('tbtOverlay').classList.add('show');
+  }
+  function stopTbtNav(){
+    if(tbtWatchId != null){ navigator.geolocation.clearWatch(tbtWatchId); tbtWatchId = null; }
+    const btn = document.getElementById('tbtStartBtn');
+    btn.textContent = 'Start Navigation';
+    btn.classList.remove('active');
+  }
+  function closeTbt(){
+    document.getElementById('tbtOverlay').classList.remove('show');
+    stopTbtNav();
+  }
+  function startTbtNav(){
+    if(!navigator.geolocation){ showNavBanner("Geolocation isn't supported here."); return; }
+    const btn = document.getElementById('tbtStartBtn');
+    btn.textContent = 'Stop Navigation';
+    btn.classList.add('active');
+    tbtWatchId = navigator.geolocation.watchPosition(
+      pos=>{
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        if(userMarker) userMarker.setLatLng([lat, lon]); else userMarker = L.marker([lat, lon], {icon:pulseDivIcon('#3B82F6')}).addTo(map);
+        map.panTo([lat, lon]);
+        // Advance to the next instruction once we're close to its maneuver point.
+        let s = tbtSteps[tbtCurrentIdx];
+        while(s && s.maneuver && s.maneuver.location && tbtCurrentIdx < tbtSteps.length - 1){
+          const [mlon, mlat] = s.maneuver.location;
+          const distM = haversineMiles(lat, lon, mlat, mlon) * 1609.34;
+          if(distM < 35){ tbtCurrentIdx++; s = tbtSteps[tbtCurrentIdx]; renderTbtSteps(); }
+          else break;
+        }
+        updateTbtNext();
+      },
+      err=> showNavBanner(geoErrorMessage(err)),
+      {enableHighAccuracy:true, maximumAge:2000, timeout:10000}
+    );
+  }
+  document.getElementById('startTbt').addEventListener('click', openTurnByTurn);
+  document.getElementById('tbtClose').addEventListener('click', closeTbt);
+  document.getElementById('tbtStartBtn').addEventListener('click', ()=>{
+    if(tbtWatchId != null) stopTbtNav(); else startTbtNav();
+  });
+
   document.getElementById('clearRoute').addEventListener('click', ()=>{
     clearRouteLines();
     routesData = []; selectedRouteIdx = 0;
@@ -1126,6 +1323,7 @@
     document.getElementById('routeOptions').innerHTML = '';
     document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
+    closeTbt();
   });
 
 })();
