@@ -170,7 +170,7 @@
     color:var(--text); font-weight:700; font-size:14px;
   }
   .btn:focus-visible{outline:2px solid var(--text); outline-offset:2px;}
-  .search-row{display:flex; gap:8px; width:100%; max-width:280px;}
+  .search-row{display:flex; gap:8px; width:100%; max-width:280px; position:relative;}
   .search-row input{
     flex:1; border-radius:999px; border:1px solid var(--glass-border); background:var(--glass);
     padding:10px 16px; font-size:14px; color:var(--text); outline:none;
@@ -336,16 +336,22 @@
       </button>
       <div class="nav-top">
         <div class="nav-banner" id="navBanner"></div>
-        <div class="nav-search">
-          <span class="dot" style="background:#3B82F6;"></span>
-          <input id="originInput" type="text" placeholder="Your location" autocomplete="off">
+        <div class="nav-field">
+          <div class="nav-search">
+            <span class="dot" style="background:#3B82F6;"></span>
+            <input id="originInput" type="text" placeholder="Your location" autocomplete="off">
+          </div>
+          <div class="suggest-list" id="originSuggest"></div>
         </div>
-        <div class="nav-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
-          <input id="destInput" type="text" placeholder="Search a destination" autocomplete="off">
-          <button id="goBtn" aria-label="Get directions">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </button>
+        <div class="nav-field">
+          <div class="nav-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input id="destInput" type="text" placeholder="Search a destination" autocomplete="off">
+            <button id="goBtn" aria-label="Get directions">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+          <div class="suggest-list" id="destSuggest"></div>
         </div>
       </div>
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
@@ -359,6 +365,7 @@
           <span><b id="sheetDist">—</b> mi</span>
           <span><b id="sheetTime">—</b> min drive</span>
         </div>
+        <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
           <button class="ghost" id="clearRoute">Clear</button>
           <button class="primary" id="openMaps">Open turn-by-turn</button>
@@ -584,7 +591,7 @@
     scroll.innerHTML = `<div class="center-msg">
         <p class="msg-title" style="font-size:18px;">${message}</p>
         <p>Search for a city instead, or try again.</p>
-        <div class="search-row"><input id="citySearch" type="text" placeholder="Try “Bridgeport, CT”"></div>
+        <div class="search-row"><input id="citySearch" type="text" placeholder="Try “Bridgeport, CT”"><div class="suggest-list" id="citySuggest"></div></div>
         <div style="display:flex; gap:10px;">
           <button class="btn" id="citySearchGo">Search</button>
           <button class="btn" id="tryLocationAgain">Use my location</button>
@@ -592,19 +599,27 @@
         <p id="citySearchError" style="color:#B84B4B; font-size:12.5px; min-height:16px;"></p>
       </div>`;
     document.getElementById('tryLocationAgain').addEventListener('click', initWeather);
+    let citySelected = null;
+    const cityInput = document.getElementById('citySearch');
+    attachAutocomplete(cityInput, document.getElementById('citySuggest'), sel=>{ citySelected = sel; });
     const go = ()=>{
-      const q = document.getElementById('citySearch').value.trim();
       const errEl = document.getElementById('citySearchError');
+      if(citySelected){
+        weatherState.lat = citySelected.lat; weatherState.lon = citySelected.lon; weatherState.place = citySelected.short;
+        fetchWeather(citySelected.lat, citySelected.lon, citySelected.short);
+        return;
+      }
+      const q = cityInput.value.trim();
       if(!q) return;
       errEl.textContent = 'Searching…';
       geocodeCity(q).then(res=>{
-        if(!res){ if(errEl) errEl.textContent = "Couldn't find that place. Try “City, State/Country”."; return; }
+        if(!res){ if(errEl) errEl.textContent = "Couldn't find that place. Try picking a suggestion, or add a state/country."; return; }
         weatherState.lat = res.lat; weatherState.lon = res.lon; weatherState.place = res.name;
         fetchWeather(res.lat, res.lon, res.name);
       }).catch(()=>{ if(errEl) errEl.textContent = 'Search failed — check your connection and try again.'; });
     };
     document.getElementById('citySearchGo').addEventListener('click', go);
-    document.getElementById('citySearch').addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
+    cityInput.addEventListener('keydown', e=>{ if(e.key==='Enter') go(); });
   }
 
   async function reverseGeocode(lat, lon){
@@ -618,33 +633,100 @@
   // Open-Meteo's own geocoder: reliable CORS, no key, no user-agent policy —
   // used instead of Nominatim search, which can be rate-limited or blocked
   // from sandboxed origins.
-  async function geocodeCity(q){
-    // Try Open-Meteo's geocoder first.
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Looks up up to `count` candidate places for a query, trying Open-Meteo's
+  // geocoder first and falling back to Nominatim if that host is unreachable.
+  // If the full query (e.g. "Vienna, Virginia") returns nothing, it retries
+  // with just the part before the comma so ambiguous names still surface
+  // real candidates — the caller picks the right one from a dropdown rather
+  // than silently getting the most-populous match worldwide.
+  async function fetchPlaces(query, count){
     try{
-      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`);
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`);
       if(r.ok){
         const j = await r.json();
-        if(j.results && j.results.length){
-          const res = j.results[0];
+        const results = (j.results||[]).map(res=>{
           const parts = [res.name, res.admin1, res.country].filter(Boolean);
-          return {lat:res.latitude, lon:res.longitude, name:parts.slice(0,2).join(', ')};
-        }
-        // request succeeded but found nothing — don't bother with a fallback provider
-        return null;
+          return {lat:res.latitude, lon:res.longitude, label:parts.join(', '), short:parts.slice(0,2).join(', '), full:parts.join(', ')};
+        });
+        return {results, error:null};
       }
-    }catch(e){ /* network/CORS issue reaching this host — try the fallback provider below */ }
-
-    // Fallback: Nominatim, in case the primary geocoder's host is unreachable
-    // from this network/browser.
+    }catch(e){ /* fall through to Nominatim */ }
     try{
-      const r2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+      const r2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=${count}`);
       if(!r2.ok) throw new Error('nominatim request failed');
       const j2 = await r2.json();
-      if(!j2.length) return null;
-      return {lat:parseFloat(j2[0].lat), lon:parseFloat(j2[0].lon), name:j2[0].display_name.split(',').slice(0,2).join(',')};
+      const results = j2.map(item=>{
+        const bits = item.display_name.split(',').map(s=>s.trim());
+        return {lat:parseFloat(item.lat), lon:parseFloat(item.lon), label:bits.slice(0,3).join(', '), short:bits.slice(0,2).join(', '), full:bits.join(', ')};
+      });
+      return {results, error:null};
     }catch(e){
-      throw new Error('geocoding unavailable');
+      return {results:[], error:'unreachable'};
     }
+  }
+  async function searchPlaces(query, count=6){
+    let out = await fetchPlaces(query, count);
+    if(out.results.length===0 && !out.error && query.includes(',')){
+      const shortQ = query.split(',')[0].trim();
+      if(shortQ) out = await fetchPlaces(shortQ, count);
+    }
+    return out;
+  }
+  async function geocodeCity(q){
+    const {results, error} = await searchPlaces(q, 1);
+    if(error) throw new Error('geocoding unavailable');
+    return results.length ? {lat:results[0].lat, lon:results[0].lon, name:results[0].short} : null;
+  }
+
+  // Wires a text input to a live dropdown of place suggestions. onSelect is
+  // called with the chosen place object, or null whenever the person edits
+  // the text (so a stale selection can't silently be used for routing).
+  function attachAutocomplete(inputEl, listEl, onSelect){
+    let debounceTimer = null, reqId = 0;
+    function hide(){ listEl.classList.remove('show'); }
+    function render(results, thisReq){
+      if(thisReq !== reqId) return; // a newer keystroke already superseded this response
+      if(!results.length){
+        listEl.innerHTML = `<div class="suggest-empty">No matches yet — try a different spelling.</div>`;
+        listEl.classList.add('show');
+        return;
+      }
+      listEl.innerHTML = results.map((r,i)=>{
+        const bits = r.short.split(',');
+        const main = escapeHtml((bits.shift()||'').trim());
+        const sub = escapeHtml(bits.join(',').trim());
+        return `<button type="button" class="suggest-item" data-idx="${i}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.5 7-12a7 7 0 1 0-14 0c0 4.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/></svg>
+            <span><span class="s-main">${main}</span><span class="s-sub">${sub}</span></span>
+          </button>`;
+      }).join('');
+      listEl.classList.add('show');
+      listEl.querySelectorAll('.suggest-item').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const r = results[parseInt(btn.dataset.idx, 10)];
+          inputEl.value = r.short;
+          hide();
+          onSelect(r);
+        });
+      });
+    }
+    inputEl.addEventListener('input', ()=>{
+      onSelect(null);
+      const q = inputEl.value.trim();
+      clearTimeout(debounceTimer);
+      if(q.length < 2){ hide(); return; }
+      debounceTimer = setTimeout(async ()=>{
+        const myReq = ++reqId;
+        const {results} = await searchPlaces(q, 6);
+        render(results, myReq);
+      }, 300);
+    });
+    inputEl.addEventListener('focus', ()=>{ if(listEl.innerHTML) listEl.classList.add('show'); });
+    inputEl.addEventListener('blur', ()=> setTimeout(hide, 150)); // let a click register first
   }
 
   function cToF(c){ return c*9/5+32; }
@@ -812,7 +894,8 @@
   }
 
   /* ---------------- NAVIGATE ---------------- */
-  let map, userMarker, destMarker, routeLine;
+  let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
+  let originSelected = null, destSelected = null;
   const DEFAULT_CENTER = [41.1865, -73.1952]; // Bridgeport, CT fallback
 
   function pulseDivIcon(color){
@@ -842,6 +925,9 @@
     }).addTo(map);
     L.control.zoom({position:'bottomright'}).addTo(map);
     locateUser({silentFail:true});
+
+    attachAutocomplete(document.getElementById('originInput'), document.getElementById('originSuggest'), sel=>{ originSelected = sel; });
+    attachAutocomplete(document.getElementById('destInput'), document.getElementById('destSuggest'), sel=>{ destSelected = sel; });
   }
 
   // Wrapped so both initMap() and the locate button reuse the same logic
@@ -891,7 +977,10 @@
     return R * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
+  // Prefers an explicit dropdown pick over a freeform-text geocode, since a
+  // typed name alone (e.g. "Vienna") is ambiguous worldwide.
   async function resolveOrigin(){
+    if(originSelected) return {lat:originSelected.lat, lon:originSelected.lon, name:originSelected.short};
     const typed = document.getElementById('originInput').value.trim();
     if(typed){
       const res = await geocodeCity(typed);
@@ -901,9 +990,63 @@
     if(userMarker){ const ll = userMarker.getLatLng(); return {lat:ll.lat, lon:ll.lng, name:'Your location'}; }
     return {lat:DEFAULT_CENTER[0], lon:DEFAULT_CENTER[1], name:'Default location'};
   }
+  async function resolveDestination(){
+    if(destSelected) return {lat:destSelected.lat, lon:destSelected.lon, name:destSelected.short};
+    const typed = document.getElementById('destInput').value.trim();
+    if(!typed) return null;
+    return await geocodeCity(typed);
+  }
 
-  async function routeTo(query){
-    if(!query) return;
+  function clearRouteLines(){
+    routeLines.forEach(l=> map.removeLayer(l));
+    routeLines = [];
+  }
+
+  // Draws every candidate route, highlighting whichever is selected; taps
+  // on a non-selected line (or its chip) switch which one is highlighted.
+  function renderRoutes(){
+    clearRouteLines();
+    routesData.forEach((r, i)=>{
+      const isSel = i === selectedRouteIdx;
+      const latlngs = r.geometry.coordinates.map(c=>[c[1], c[0]]);
+      const line = L.polyline(latlngs, {
+        color: isSel ? '#3B82F6' : '#9AA5B1',
+        weight: isSel ? 6 : 4,
+        opacity: isSel ? 0.95 : 0.6,
+        dashArray: isSel ? null : '1 9',
+        lineJoin: 'round'
+      }).addTo(map);
+      line.on('click', ()=> selectRoute(i));
+      routeLines.push(line);
+    });
+    if(routeLines[selectedRouteIdx]) routeLines[selectedRouteIdx].bringToFront();
+  }
+
+  function selectRoute(i){
+    selectedRouteIdx = i;
+    renderRoutes();
+    const r = routesData[i];
+    document.getElementById('sheetDist').textContent = (r.distance/1609.34).toFixed(1);
+    document.getElementById('sheetTime').textContent = Math.round(r.duration/60);
+    renderRouteChips();
+  }
+
+  function renderRouteChips(){
+    const wrap = document.getElementById('routeOptions');
+    if(routesData.length <= 1){ wrap.innerHTML = ''; return; }
+    const ranked = routesData.map((r,i)=>({r,i})).sort((a,b)=> a.r.duration - b.r.duration);
+    wrap.innerHTML = ranked.map(({r,i}, rank)=>{
+      const mins = Math.round(r.duration/60);
+      const mi = (r.distance/1609.34).toFixed(1);
+      const label = rank===0 ? 'Fastest' : `Route ${rank+1}`;
+      return `<button type="button" class="route-chip ${i===selectedRouteIdx?'active':''}" data-idx="${i}">${label}<span>${mins} min · ${mi} mi</span></button>`;
+    }).join('');
+    wrap.querySelectorAll('.route-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=> selectRoute(parseInt(btn.dataset.idx, 10)));
+    });
+  }
+
+  async function routeTo(){
     showNavBanner('');
     setNavStatus('Finding your starting point…');
     let origin, dest;
@@ -911,17 +1054,17 @@
       origin = await resolveOrigin();
     }catch(e){
       setNavStatus('');
-      showNavBanner('Couldn\'t find that starting point. Try "City, State" or leave it blank to use your current location.');
+      showNavBanner('Couldn\'t find that starting point. Pick a suggestion, or leave it blank to use your current location.');
       return;
     }
 
     setNavStatus('Searching…');
     try{
-      dest = await geocodeCity(query);
+      dest = await resolveDestination();
     }catch(e){
       dest = null;
     }
-    if(!dest){ setNavStatus(''); showNavBanner('No results for that destination. Try adding a city or state.'); return; }
+    if(!dest){ setNavStatus(''); showNavBanner('No results for that destination. Pick a suggestion, or add a state/country.'); return; }
 
     if(userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([origin.lat, origin.lon], {icon:pulseDivIcon('#3B82F6')}).addTo(map);
@@ -929,35 +1072,39 @@
     destMarker = L.marker([dest.lat, dest.lon], {icon:pinDivIcon('#E24A4A')}).addTo(map);
 
     setNavStatus('Getting directions…');
-    let route = null;
+    routesData = [];
+    selectedRouteIdx = 0;
     try{
-      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true`;
       const rr = await fetch(rUrl);
       if(rr.ok){
         const rj = await rr.json();
-        if(rj.routes && rj.routes.length) route = rj.routes[0];
+        if(rj.routes && rj.routes.length) routesData = rj.routes;
       }
     }catch(e){ /* fall through to straight-line fallback below */ }
 
-    if(routeLine) map.removeLayer(routeLine);
+    clearRouteLines();
 
-    if(route){
-      const latlngs = route.geometry.coordinates.map(c=>[c[1], c[0]]);
-      routeLine = L.polyline(latlngs, {color:'#3B82F6', weight:6, opacity:.9, lineJoin:'round'}).addTo(map);
-      map.fitBounds(routeLine.getBounds(), {padding:[60,60]});
-      document.getElementById('sheetDist').textContent = (route.distance/1609.34).toFixed(1);
-      document.getElementById('sheetTime').textContent = Math.round(route.duration/60);
+    if(routesData.length){
+      renderRoutes();
+      renderRouteChips();
+      const bounds = routeLines[selectedRouteIdx].getBounds();
+      map.fitBounds(bounds, {padding:[60,60]});
+      document.getElementById('sheetDist').textContent = (routesData[0].distance/1609.34).toFixed(1);
+      document.getElementById('sheetTime').textContent = Math.round(routesData[0].duration/60);
       showNavBanner('');
     } else {
       // Live routing unavailable — fall back to a direct line so the
       // feature still gives useful distance/direction information.
-      routeLine = L.polyline([[origin.lat, origin.lon],[dest.lat, dest.lon]], {
+      const line = L.polyline([[origin.lat, origin.lon],[dest.lat, dest.lon]], {
         color:'#3B82F6', weight:4, opacity:.85, dashArray:'2 10', lineCap:'round'
       }).addTo(map);
-      map.fitBounds(routeLine.getBounds(), {padding:[60,60]});
+      routeLines = [line];
+      map.fitBounds(line.getBounds(), {padding:[60,60]});
       const miles = haversineMiles(origin.lat, origin.lon, dest.lat, dest.lon);
       document.getElementById('sheetDist').textContent = miles.toFixed(1) + ' (direct)';
       document.getElementById('sheetTime').textContent = '—';
+      document.getElementById('routeOptions').innerHTML = '';
       showNavBanner('Live driving directions aren\'t reachable from this preview, so this shows a direct line and straight-line distance instead.');
     }
 
@@ -968,13 +1115,16 @@
     };
     setNavStatus('');
   }
-  document.getElementById('goBtn').addEventListener('click', ()=> routeTo(document.getElementById('destInput').value.trim()));
-  document.getElementById('destInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(e.target.value.trim()); });
+  document.getElementById('goBtn').addEventListener('click', routeTo);
+  document.getElementById('destInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(); });
+  document.getElementById('originInput').addEventListener('keydown', e=>{ if(e.key==='Enter') routeTo(); });
   document.getElementById('clearRoute').addEventListener('click', ()=>{
-    if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+    clearRouteLines();
+    routesData = []; selectedRouteIdx = 0;
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
-    document.getElementById('destInput').value='';
+    document.getElementById('routeOptions').innerHTML = '';
+    document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
   });
 
