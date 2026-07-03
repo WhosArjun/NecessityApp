@@ -385,14 +385,14 @@
         <div class="nav-field">
           <div class="nav-search">
             <span class="dot" style="background:#3B82F6;"></span>
-            <input id="originInput" type="text" placeholder="Your location" autocomplete="off">
+            <input id="originInput" type="text" placeholder="Your location or an address" autocomplete="off">
           </div>
           <div class="suggest-list" id="originSuggest"></div>
         </div>
         <div class="nav-field">
           <div class="nav-search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input id="destInput" type="text" placeholder="Search a destination" autocomplete="off">
+            <input id="destInput" type="text" placeholder="Search an address or place" autocomplete="off">
             <button id="goBtn" aria-label="Get directions">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </button>
@@ -424,6 +424,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <div class="tbt-summary"><b id="tbtDist">—</b> · <b id="tbtTime">—</b></div>
+          <button class="tbt-close" id="tbtMute" aria-label="Mute voice guidance" style="margin-left:auto;">
+            <svg id="tbtMuteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/></svg>
+          </button>
         </div>
         <div class="tbt-next" id="tbtNext">
           <span class="tbt-next-icon" id="tbtNextIcon"></span>
@@ -700,44 +703,62 @@
     return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // Looks up up to `count` candidate places for a query, trying Open-Meteo's
-  // geocoder first and falling back to Nominatim if that host is unreachable.
-  // If the full query (e.g. "Vienna, Virginia") returns nothing, it retries
-  // with just the part before the comma so ambiguous names still surface
-  // real candidates — the caller picks the right one from a dropdown rather
-  // than silently getting the most-populous match worldwide.
-  async function fetchPlaces(query, count){
+  // Open-Meteo's geocoder is a clean city/town gazetteer but doesn't know
+  // street addresses at all, and previously we only fell back to Nominatim
+  // (which does) when Open-Meteo's request failed outright — not when it
+  // simply found nothing, which is exactly what happens for a full address.
+  // So both are queried every time and merged, with address-shaped queries
+  // (starting with a house number) preferring the address-capable results.
+  async function fetchOpenMeteo(query, count){
     try{
       const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`);
-      if(r.ok){
-        const j = await r.json();
-        const results = (j.results||[]).map(res=>{
-          const parts = [res.name, res.admin1, res.country].filter(Boolean);
-          return {lat:res.latitude, lon:res.longitude, label:parts.join(', '), short:parts.slice(0,2).join(', '), full:parts.join(', ')};
-        });
-        return {results, error:null};
-      }
-    }catch(e){ /* fall through to Nominatim */ }
-    try{
-      const r2 = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=${count}`);
-      if(!r2.ok) throw new Error('nominatim request failed');
-      const j2 = await r2.json();
-      const results = j2.map(item=>{
-        const bits = item.display_name.split(',').map(s=>s.trim());
-        return {lat:parseFloat(item.lat), lon:parseFloat(item.lon), label:bits.slice(0,3).join(', '), short:bits.slice(0,2).join(', '), full:bits.join(', ')};
+      if(!r.ok) return {results:[], ok:false};
+      const j = await r.json();
+      const results = (j.results||[]).map(res=>{
+        const parts = [res.name, res.admin1, res.country].filter(Boolean);
+        return {lat:res.latitude, lon:res.longitude, short:parts.slice(0,2).join(', '), full:parts.join(', ')};
       });
-      return {results, error:null};
-    }catch(e){
-      return {results:[], error:'unreachable'};
-    }
+      return {results, ok:true};
+    }catch(e){ return {results:[], ok:false}; }
   }
-  async function searchPlaces(query, count=6){
-    let out = await fetchPlaces(query, count);
-    if(out.results.length===0 && !out.error && query.includes(',')){
-      const shortQ = query.split(',')[0].trim();
-      if(shortQ) out = await fetchPlaces(shortQ, count);
+  async function fetchNominatim(query, count){
+    try{
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=${count}`);
+      if(!r.ok) return {results:[], ok:false};
+      const j = await r.json();
+      const results = j.map(item=>{
+        const a = item.address || {};
+        const houseStreet = [a.house_number, a.road].filter(Boolean).join(' ');
+        const cityLike = a.city || a.town || a.village || a.hamlet || a.county;
+        // A clean "123 Main St, Springfield, IL" style label for addresses;
+        // otherwise fall back to the first few display_name segments.
+        const short = (houseStreet && cityLike)
+          ? [houseStreet, cityLike, a.state].filter(Boolean).join(', ')
+          : item.display_name.split(',').slice(0,3).map(s=>s.trim()).join(', ');
+        return {lat:parseFloat(item.lat), lon:parseFloat(item.lon), short, full:item.display_name};
+      });
+      return {results, ok:true};
+    }catch(e){ return {results:[], ok:false}; }
+  }
+  function dedupePlaces(list){
+    const seen = new Set(), out = [];
+    for(const p of list){
+      const key = p.lat.toFixed(3) + ',' + p.lon.toFixed(3);
+      if(seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
     }
     return out;
+  }
+  async function searchPlaces(query, count=6){
+    const [om, nom] = await Promise.all([fetchOpenMeteo(query, count), fetchNominatim(query, count)]);
+    const looksLikeAddress = /^\d/.test(query.trim());
+    let merged = dedupePlaces(looksLikeAddress ? [...nom.results, ...om.results] : [...om.results, ...nom.results]).slice(0, count);
+    if(merged.length===0 && query.includes(',')){
+      const shortQ = query.split(',')[0].trim();
+      if(shortQ && shortQ !== query) return searchPlaces(shortQ, count);
+    }
+    return {results: merged, error: (!om.ok && !nom.ok) ? 'unreachable' : null};
   }
   async function geocodeCity(q){
     const {results, error} = await searchPlaces(q, 1);
@@ -1002,6 +1023,38 @@
       iconSize:[30,40], iconAnchor:[15,40]
     });
   }
+  // A Google-Maps-style "puck": a soft heading cone plus a chevron that
+  // rotates to point the direction of travel. The rotor is a separate inner
+  // element so headings can be updated by tweaking one CSS transform instead
+  // of recreating the whole marker each GPS fix (smoother, no flicker).
+  function navPuckIcon(heading){
+    const deg = heading == null ? 0 : heading;
+    return L.divIcon({
+      className:'',
+      html:`<div class="puck-rotor" style="width:52px;height:52px;transform:rotate(${deg}deg);transition:transform .35s linear;position:relative;">
+          <div style="position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+            background:radial-gradient(ellipse at 50% 30%, rgba(59,130,246,.4), rgba(59,130,246,0) 68%);"></div>
+          <svg width="52" height="52" viewBox="0 0 52 52" style="position:absolute;left:0;top:0;">
+            <circle cx="26" cy="26" r="10" fill="#3B82F6" stroke="#fff" stroke-width="3"/>
+            <path d="M26 4 L33 18 L26 14 L19 18 Z" fill="#3B82F6" stroke="#fff" stroke-width="1"/>
+          </svg>
+        </div>`,
+      iconSize:[52,52], iconAnchor:[26,26]
+    });
+  }
+  function setPuckHeading(deg){
+    if(!userMarker) return;
+    const el = userMarker.getElement();
+    const rotor = el && el.querySelector('.puck-rotor');
+    if(rotor) rotor.style.transform = `rotate(${deg}deg)`;
+  }
+  function bearingBetween(lat1, lon1, lat2, lon2){
+    const toRad = d=> d*Math.PI/180, toDeg = r=> r*180/Math.PI;
+    const φ1=toRad(lat1), φ2=toRad(lat2), Δλ=toRad(lon2-lon1);
+    const y = Math.sin(Δλ)*Math.cos(φ2);
+    const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }
 
   function showNavBanner(html){
     const el = document.getElementById('navBanner');
@@ -1208,6 +1261,17 @@
 
   /* ---------------- IN-APP TURN-BY-TURN ---------------- */
   let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null;
+  let voiceOn = true, lastNavPos = null, lastHeading = 0;
+
+  function speak(text){
+    if(!voiceOn || !('speechSynthesis' in window) || !text) return;
+    try{
+      window.speechSynthesis.cancel(); // don't let announcements pile up and talk over each other
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1; u.pitch = 1;
+      window.speechSynthesis.speak(u);
+    }catch(e){ /* speech synthesis unsupported/blocked — fail silently */ }
+  }
 
   function formatDist(m){
     if(m == null) return '';
@@ -1261,6 +1325,17 @@
     document.getElementById('tbtNextInstr').textContent = describeStep(s);
     document.getElementById('tbtNextDist').textContent = formatDist(s.distance) || 'Now';
   }
+  function setMuteIcon(){
+    document.getElementById('tbtMuteIcon').innerHTML = voiceOn
+      ? `<path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/>`
+      : `<path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 9l6 6M22 9l-6 6"/>`;
+  }
+  document.getElementById('tbtMute').addEventListener('click', ()=>{
+    voiceOn = !voiceOn;
+    setMuteIcon();
+    if(!voiceOn) window.speechSynthesis.cancel();
+  });
+
   function openTurnByTurn(){
     const route = routesData[selectedRouteIdx];
     if(!route || !route.legs || !route.legs.length){
@@ -1268,11 +1343,13 @@
       return;
     }
     tbtSteps = [].concat(...route.legs.map(l=> l.steps || []));
+    tbtSteps.forEach(s=>{ s._announcedFar = false; s._announcedNear = false; }); // per-step voice-prompt state
     tbtCurrentIdx = 0;
     document.getElementById('tbtDist').textContent = (route.distance/1609.34).toFixed(1) + ' mi';
     document.getElementById('tbtTime').textContent = Math.round(route.duration/60) + ' min';
     renderTbtSteps();
     updateTbtNext();
+    setMuteIcon();
     document.getElementById('tbtOverlay').classList.add('show');
   }
   function stopTbtNav(){
@@ -1280,6 +1357,10 @@
     const btn = document.getElementById('tbtStartBtn');
     btn.textContent = 'Start Navigation';
     btn.classList.remove('active');
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    lastNavPos = null;
+    // Back to the plain location dot once navigation stops.
+    if(userMarker){ const ll = userMarker.getLatLng(); map.removeLayer(userMarker); userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map); }
   }
   function closeTbt(){
     document.getElementById('tbtOverlay').classList.remove('show');
@@ -1290,18 +1371,48 @@
     const btn = document.getElementById('tbtStartBtn');
     btn.textContent = 'Stop Navigation';
     btn.classList.add('active');
+    lastNavPos = null;
+    speak(`Starting navigation. ${describeStep(tbtSteps[0])}.`);
     tbtWatchId = navigator.geolocation.watchPosition(
       pos=>{
         const lat = pos.coords.latitude, lon = pos.coords.longitude;
-        if(userMarker) userMarker.setLatLng([lat, lon]); else userMarker = L.marker([lat, lon], {icon:pulseDivIcon('#3B82F6')}).addTo(map);
+
+        // Prefer the device's own compass/GPS heading; fall back to the
+        // bearing between consecutive fixes so the puck still turns to
+        // face the direction of travel while moving.
+        let heading = (pos.coords.heading != null && !isNaN(pos.coords.heading)) ? pos.coords.heading : null;
+        if(heading == null && lastNavPos){
+          const moved = haversineMiles(lastNavPos.lat, lastNavPos.lon, lat, lon) * 1609.34;
+          if(moved > 3) heading = bearingBetween(lastNavPos.lat, lastNavPos.lon, lat, lon);
+        }
+        if(heading == null) heading = lastHeading;
+        lastHeading = heading;
+        lastNavPos = {lat, lon};
+
+        if(userMarker && userMarker.getElement() && userMarker.getElement().querySelector('.puck-rotor')){
+          userMarker.setLatLng([lat, lon]);
+          setPuckHeading(heading);
+        } else {
+          if(userMarker) map.removeLayer(userMarker);
+          userMarker = L.marker([lat, lon], {icon:navPuckIcon(heading)}).addTo(map);
+        }
         map.panTo([lat, lon]);
-        // Advance to the next instruction once we're close to its maneuver point.
-        let s = tbtSteps[tbtCurrentIdx];
-        while(s && s.maneuver && s.maneuver.location && tbtCurrentIdx < tbtSteps.length - 1){
+
+        // Proactive voice prompts as you approach the upcoming maneuver.
+        const s = tbtSteps[tbtCurrentIdx];
+        if(s && s.maneuver && s.maneuver.location){
           const [mlon, mlat] = s.maneuver.location;
           const distM = haversineMiles(lat, lon, mlat, mlon) * 1609.34;
-          if(distM < 35){ tbtCurrentIdx++; s = tbtSteps[tbtCurrentIdx]; renderTbtSteps(); }
-          else break;
+          if(!s._announcedFar && distM < 800 && distM > 150){ s._announcedFar = true; speak(`In ${formatDist(distM)}, ${describeStep(s)}.`); }
+          if(!s._announcedNear && distM < 150){ s._announcedNear = true; speak(describeStep(s)); }
+          if(distM < 35){
+            if(tbtCurrentIdx < tbtSteps.length - 1){
+              tbtCurrentIdx++;
+              renderTbtSteps();
+              const next = tbtSteps[tbtCurrentIdx];
+              if(next && next.maneuver.type === 'arrive') speak('You have arrived at your destination.');
+            }
+          }
         }
         updateTbtNext();
       },
