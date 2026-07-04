@@ -56,8 +56,12 @@
     filter:blur(2px); opacity:.65; pointer-events:none; transition:top 1.4s ease, left 1.4s ease, opacity 1.4s ease;
   }
 
-  .view{position:absolute; inset:0; display:none; flex-direction:column; z-index:2;}
-  .view.active{display:flex;}
+  .view{
+    position:absolute; inset:0; display:flex; flex-direction:column; z-index:1;
+    opacity:0; transform:scale(.98) translateY(8px); pointer-events:none;
+    transition:opacity .32s ease, transform .38s cubic-bezier(.2,.8,.3,1);
+  }
+  .view.active{opacity:1; transform:scale(1) translateY(0); pointer-events:auto; z-index:2;}
 
   .statusbar{
     display:flex; justify-content:space-between; align-items:center;
@@ -91,6 +95,7 @@
   .card-desc{font-size:13px; color:var(--text-dim);}
   .chevron{font-size:18px; color:var(--text-dim); transition:transform .18s ease;}
   .app-card:hover .chevron{transform:translateX(3px);}
+  .card-preview-temp{font-family:var(--font-display); font-size:22px; font-weight:500; color:var(--text); flex:0 0 auto;}
 
   /* ---------- SHARED HEADER ---------- */
   .subhead{display:flex; align-items:center; justify-content:space-between; padding:14px 20px 6px;}
@@ -137,6 +142,15 @@
   .alert-item summary::-webkit-details-marker{display:none;}
   .alert-item p{margin:0; padding:0 14px 12px 18px; font-size:12.5px; color:var(--text-dim); line-height:1.5;}
   #view-weather .scroll{flex:1; overflow-y:auto; padding:6px 20px 34px; -webkit-overflow-scrolling:touch;}
+  #view-weather .scroll.fade-in{animation:fadeInUp .45s ease;}
+  @keyframes fadeInUp{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  .loc-head{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px;}
+  .refresh-btn{
+    width:26px; height:26px; border-radius:50%; border:0; background:var(--glass); color:var(--text-dim);
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .refresh-btn svg{width:13px; height:13px;}
+  .refresh-btn.spinning svg{animation:spin .7s linear infinite;}
   #view-weather .scroll::-webkit-scrollbar{display:none;}
   .loc-name{font-size:15px; font-weight:600; text-align:center; margin:6px 0 0;}
   .loc-date{font-size:12.5px; color:var(--text-dim); text-align:center; margin:2px 0 0;}
@@ -374,8 +388,9 @@
             <span class="card-icon" id="homeWeatherIcon"></span>
             <span class="card-text">
               <span class="card-label">Weather</span>
-              <span class="card-desc">Live forecast for your sky</span>
+              <span class="card-desc" id="homeWeatherDesc">Live forecast for your sky</span>
             </span>
+            <span class="card-preview-temp" id="homeCardTemp" style="display:none;"></span>
             <span class="chevron">→</span>
           </button>
           <button class="app-card" data-target="nav">
@@ -695,7 +710,9 @@
     if(!weatherState.loaded){
       applySky(skyForHour(h + now.getMinutes()/60));
     }
-    document.getElementById('homeWeatherIcon').innerHTML = (h>=6.5 && h<19) ? ICONS.clearDay : ICONS.clearNight;
+    if(!weatherState.loaded){
+      document.getElementById('homeWeatherIcon').innerHTML = (h>=6.5 && h<19) ? ICONS.clearDay : ICONS.clearNight;
+    }
   }
   updateClockAndGreeting();
   setInterval(updateClockAndGreeting, 30000);
@@ -753,7 +770,13 @@
     const scroll = document.getElementById('weatherScroll');
     scroll.innerHTML = `<div class="center-msg" id="weatherLoading"><div class="spinner"></div>
       <p class="msg-title" style="font-size:18px;">Finding your sky…</p>
-      <p>Allow location access to see live conditions.</p></div>`;
+      <p id="weatherLoadingHint">Allow location access to see live conditions.</p></div>`;
+    // If this drags on, say so rather than leaving a spinner with no
+    // feedback — the actual fetches all still time out on their own.
+    setTimeout(()=>{
+      const hint = document.getElementById('weatherLoadingHint');
+      if(hint) hint.textContent = "Still working — this can take a few extra seconds on a slow connection.";
+    }, 6000);
     if(!navigator.geolocation){
       showWeatherManualSearch("Location isn't available in this browser.");
       return;
@@ -864,7 +887,7 @@
 
   async function reverseGeocode(lat, lon){
     try{
-      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+      const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`, null, 6000);
       const j = await r.json();
       const a = j.address || {};
       return a.city || a.town || a.village || a.county || a.state || 'Your Location';
@@ -885,7 +908,7 @@
   // (starting with a house number) preferring the address-capable results.
   async function fetchOpenMeteo(query, count){
     try{
-      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`);
+      const r = await fetchWithTimeout(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`, null, 8000);
       if(!r.ok) return {results:[], ok:false};
       const j = await r.json();
       const results = (j.results||[]).map(res=>{
@@ -897,7 +920,7 @@
   }
   async function fetchNominatim(query, count){
     try{
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=${count}`);
+      const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=${count}`, null, 8000);
       if(!r.ok) return {results:[], ok:false};
       const j = await r.json();
       const results = j.map(item=>{
@@ -1079,6 +1102,14 @@
 
   function cToF(c){ return c*9/5+32; }
   function fmtTemp(c){ const v = weatherState.unit==='f' ? cToF(c) : c; return Math.round(v); }
+  function updateHomeCardPreview(tempC, code, isDay){
+    const badge = document.getElementById('homeCardTemp');
+    const icon = document.getElementById('homeWeatherIcon');
+    const desc = document.getElementById('homeWeatherDesc');
+    if(badge){ badge.textContent = fmtTemp(tempC) + '°'; badge.style.display = 'inline'; }
+    if(icon) icon.innerHTML = iconFor(code, isDay);
+    if(desc) desc.textContent = weatherLabel(code) + ' · ' + (weatherState.place || 'your area');
+  }
   function unitSuffix(){ return weatherState.unit==='f' ? '°' : '°'; }
   function windUnit(kmh){ return weatherState.unit==='f' ? Math.round(kmh*0.621371) : Math.round(kmh); }
   function windUnitLabel(){ return weatherState.unit==='f' ? 'mph' : 'km/h'; }
@@ -1100,6 +1131,36 @@
     return {label:'Hazardous', note:'Serious health risk.'};
   }
 
+  // Every network call in this app gets a hard timeout. Without one, a
+  // request that never resolves OR rejects (silently blocked by a proxy,
+  // stalled DNS, etc.) would make Promise.all wait forever — freezing the
+  // whole screen on a loading spinner with no error ever shown.
+  function fetchWithTimeout(url, opts, ms=10000){
+    const controller = new AbortController();
+    const timer = setTimeout(()=> controller.abort(), ms);
+    return fetch(url, {...(opts||{}), signal: controller.signal}).finally(()=> clearTimeout(timer));
+  }
+
+  // Both of these are "nice to have" add-ons to the core forecast — each is
+  // fully self-contained and never throws/rejects, so a hiccup on either one
+  // (blocked host, CORS, timeout) can't take down the actual weather load.
+  async function fetchAqiSafe(lat, lon){
+    try{
+      const r = await fetchWithTimeout(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi&timezone=auto`, null, 6000);
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.current ? j.current.us_aqi : null;
+    }catch(e){ return null; }
+  }
+  async function fetchAlertsSafe(lat, lon){
+    try{
+      const r = await fetchWithTimeout(`https://api.weather.gov/alerts/active?point=${lat},${lon}`, null, 6000);
+      if(!r.ok) return [];
+      const j = await r.json();
+      return (j.features||[]).map(f=> f.properties);
+    }catch(e){ return []; } // NWS only covers the US — elsewhere this just quietly returns nothing
+  }
+
   async function fetchWeather(lat, lon, placeName){
     weatherState.loading = true;
     try{
@@ -1108,21 +1169,14 @@
         `&hourly=temperature_2m,weather_code,precipitation_probability,uv_index,visibility,dew_point_2m`+
         `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max`+
         `&timezone=auto&forecast_days=8`;
-      const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi&timezone=auto`;
-      // NWS only covers the US; queries elsewhere just come back empty, which
-      // is treated the same as "no active alerts" rather than an error.
-      const alertsUrl = `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
 
-      const [wRes, aqRes, alertRes] = await Promise.all([
-        fetch(wUrl),
-        fetch(aqUrl).catch(()=>null),
-        fetch(alertsUrl, {headers:{'Accept':'application/geo+json'}}).catch(()=>null)
+      const [wRes, aqi, alerts] = await Promise.all([
+        fetchWithTimeout(wUrl, null, 12000),
+        fetchAqiSafe(lat, lon),
+        fetchAlertsSafe(lat, lon)
       ]);
+      if(!wRes.ok) throw new Error('forecast request failed');
       const w = await wRes.json();
-      let aqi = null;
-      if(aqRes){ try{ const aq = await aqRes.json(); aqi = aq.current ? aq.current.us_aqi : null; }catch(e){} }
-      let alerts = [];
-      if(alertRes && alertRes.ok){ try{ const aj = await alertRes.json(); alerts = (aj.features||[]).map(f=>f.properties); }catch(e){} }
 
       weatherState.data = w;
       weatherState.aqi = aqi;
@@ -1131,7 +1185,9 @@
       weatherState.loading = false;
       renderWeather(w, placeName, aqi, alerts);
     }catch(e){
-      showWeatherManualSearch("Couldn't load the forecast.");
+      console.error('Weather load failed:', e);
+      const timedOut = e && e.name === 'AbortError';
+      showWeatherManualSearch(timedOut ? "The forecast took too long to load." : "Couldn't load the forecast.");
     }
   }
 
@@ -1223,7 +1279,12 @@
 
     const html = `
       ${alertBannerHtml(alerts)}
-      <p class="loc-name">${placeName}</p>
+      <div class="loc-head">
+        <p class="loc-name" style="margin:0;">${placeName}</p>
+        <button type="button" class="refresh-btn" id="weatherRefreshBtn" aria-label="Refresh weather">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5"/></svg>
+        </button>
+      </div>
       <p class="loc-date">${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
       <div class="now-icon">${iconFor(cur.weather_code, isDay)}</div>
       <p class="now-temp">${fmtTemp(cur.temperature_2m)}°</p>
@@ -1256,7 +1317,16 @@
       </div>
       <p class="credit">Weather data by Open‑Meteo</p>
     `;
-    document.getElementById('weatherScroll').innerHTML = html;
+    const scrollEl = document.getElementById('weatherScroll');
+    scrollEl.innerHTML = html;
+    scrollEl.classList.remove('fade-in');
+    void scrollEl.offsetWidth; // restart the animation even if the same content re-renders
+    scrollEl.classList.add('fade-in');
+    document.getElementById('weatherRefreshBtn').addEventListener('click', function(){
+      this.classList.add('spinning');
+      fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
+    });
+    updateHomeCardPreview(cur.temperature_2m, cur.weather_code, isDay);
   }
 
   /* ---------------- NAVIGATE ---------------- */
@@ -1523,7 +1593,7 @@
     try{
       const profile = ROUTE_PROFILES[travelMode];
       const rUrl = `${profile.base}/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
-      const rr = await fetch(rUrl);
+      const rr = await fetchWithTimeout(rUrl, null, 12000);
       if(rr.ok){
         const rj = await rr.json();
         if(rj.routes && rj.routes.length) routesData = rj.routes;
