@@ -110,8 +110,32 @@
   }
   .pill-toggle button.active{background:var(--glass-strong); color:var(--text);}
   .pill-toggle button:focus-visible{outline:2px solid var(--text); outline-offset:-2px;}
+  #travelModeToggle{box-shadow:0 8px 20px rgba(0,0,0,.15); border-color:rgba(0,0,0,.06);}
+  #travelModeToggle button{color:#8b93a1; padding:9px 13px; display:flex; align-items:center;}
+  #travelModeToggle button.active{background:#1B1F2A; color:#fff;}
 
   /* ---------- WEATHER ---------- */
+  .loc-chip-row{display:flex; gap:8px; padding:2px 20px 8px; overflow-x:auto;}
+  .loc-chip-row::-webkit-scrollbar{display:none;}
+  .loc-chip{
+    flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:999px;
+    background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim); font-size:12.5px; font-weight:700;
+  }
+  .loc-chip.active{background:var(--glass-strong); color:var(--text);}
+  .loc-chip svg{width:13px; height:13px;}
+  .loc-chip-add{
+    flex:0 0 auto; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:var(--glass); border:1px solid var(--glass-border); color:var(--text);
+  }
+  .loc-chip-add svg{width:14px; height:14px;}
+  .alert-banner{display:flex; flex-direction:column; gap:6px; margin:0 0 14px;}
+  .alert-item{background:rgba(214,70,70,.14); border-radius:14px; overflow:hidden;}
+  .alert-item summary{
+    list-style:none; cursor:pointer; padding:10px 14px; font-size:13px; font-weight:700; color:var(--text);
+    border-left:4px solid #C24A2D; display:flex; align-items:center; gap:8px;
+  }
+  .alert-item summary::-webkit-details-marker{display:none;}
+  .alert-item p{margin:0; padding:0 14px 12px 18px; font-size:12.5px; color:var(--text-dim); line-height:1.5;}
   #view-weather .scroll{flex:1; overflow-y:auto; padding:6px 20px 34px; -webkit-overflow-scrolling:touch;}
   #view-weather .scroll::-webkit-scrollbar{display:none;}
   .loc-name{font-size:15px; font-weight:600; text-align:center; margin:6px 0 0;}
@@ -227,6 +251,13 @@
     margin-top:6px; border:0; background:rgba(255,255,255,.16); color:#fff; font-size:12px; font-weight:700;
     padding:6px 12px; border-radius:999px;
   }
+  .recent-chip-row{display:flex; gap:6px; overflow-x:auto; margin-top:6px; padding:0 2px;}
+  .recent-chip-row::-webkit-scrollbar{display:none;}
+  .recent-chip{
+    flex:0 0 auto; padding:7px 13px; border-radius:999px; background:rgba(255,255,255,.94); border:1px solid rgba(0,0,0,.06);
+    font-size:12px; font-weight:700; color:#4B5568; box-shadow:0 4px 12px rgba(0,0,0,.12); max-width:180px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .nav-back{
     position:absolute; top:16px; left:16px; z-index:6; width:40px; height:40px; border-radius:50%;
     background:rgba(255,255,255,.9); border:0; display:flex; align-items:center; justify-content:center;
@@ -305,6 +336,8 @@
     margin:16px 18px; padding:16px 20px; border-radius:18px; background:rgba(59,130,246,.1);
     color:#1B1F2A; font-weight:700; text-align:center;
   }
+  .settings-label{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8b93a1; margin:22px 2px 8px;}
+  .settings-note{font-size:12.5px; color:#9aa3b0; margin-top:28px; line-height:1.5;}
 
   @media (prefers-reduced-motion: reduce){
     .sky{animation:none;}
@@ -326,7 +359,12 @@
 
     <!-- HOME -->
     <section class="view active" id="view-home">
-      <div class="statusbar"><span id="clockHome">9:41</span><span>&nbsp;</span></div>
+      <div class="statusbar">
+        <span id="clockHome">9:41</span>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings" style="width:34px;height:34px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
       <div class="home-content">
         <p class="eyebrow" id="greeting">GOOD MORNING</p>
         <h1 class="home-title">Two calm<br>tools, one sky.</h1>
@@ -354,6 +392,38 @@
       </div>
     </section>
 
+    <!-- SETTINGS -->
+    <div class="tbt-overlay" id="settingsOverlay" style="background:#F5F6F8;">
+      <div class="tbt-header">
+        <button class="tbt-close" id="settingsClose" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="tbt-summary" style="font-size:16px;">Settings</div>
+      </div>
+      <div style="padding:6px 20px 30px; overflow-y:auto;">
+        <p class="settings-label">Temperature units</p>
+        <div class="pill-toggle" id="settingsUnit" style="background:#fff; border-color:#E4E7EC;">
+          <button data-unit="f">°F</button>
+          <button data-unit="c">°C</button>
+        </div>
+
+        <p class="settings-label">Sky theme</p>
+        <div class="pill-toggle" id="settingsTheme" style="background:#fff; border-color:#E4E7EC; width:100%;">
+          <button data-theme="auto" style="flex:1;">Auto</button>
+          <button data-theme="light" style="flex:1;">Light</button>
+          <button data-theme="dark" style="flex:1;">Dark</button>
+        </div>
+
+        <p class="settings-label">Navigation voice guidance</p>
+        <div class="pill-toggle" id="settingsVoice" style="background:#fff; border-color:#E4E7EC; width:100%;">
+          <button data-voice="on" style="flex:1;">On</button>
+          <button data-voice="off" style="flex:1;">Off</button>
+        </div>
+
+        <p class="settings-note">Settings apply for this session — they reset if the app is reloaded.</p>
+      </div>
+    </div>
+
     <!-- WEATHER -->
     <section class="view" id="view-weather">
       <div class="subhead">
@@ -363,6 +433,13 @@
         <div class="pill-toggle" id="unitToggle">
           <button data-unit="f" class="active">°F</button>
           <button data-unit="c">°C</button>
+        </div>
+      </div>
+      <div class="loc-chip-row" id="locChipRow"></div>
+      <div class="loc-add-box" id="locAddBox" style="display:none;">
+        <div class="search-row" style="max-width:100%; margin:0 20px 8px;">
+          <input id="locAddInput" type="text" placeholder="Add a city to compare">
+          <div class="suggest-list" id="locAddSuggest"></div>
         </div>
       </div>
       <div class="scroll" id="weatherScroll">
@@ -392,12 +469,24 @@
         <div class="nav-field">
           <div class="nav-search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input id="destInput" type="text" placeholder="Search an address or place" autocomplete="off">
+            <input id="destInput" type="text" placeholder="Address, place, or national park" autocomplete="off">
             <button id="goBtn" aria-label="Get directions">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </button>
           </div>
           <div class="suggest-list" id="destSuggest"></div>
+          <div class="recent-chip-row" id="recentChipRow" style="display:none;"></div>
+        </div>
+        <div class="pill-toggle" id="travelModeToggle" style="align-self:flex-start; background:rgba(255,255,255,.94);">
+          <button data-mode="driving" class="active">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-6a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 6M3 13v5a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-5M3 13h18"/><circle cx="7.5" cy="17" r="1.3"/><circle cx="16.5" cy="17" r="1.3"/></svg>
+          </button>
+          <button data-mode="walking">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="1.6"/><path d="M10 22l1.5-6-2-1.5.5-5 3-2 3 2 2 1M13 9l3 2-1 5M8 15l-2.5 2M14 16l2 2 3-1"/></svg>
+          </button>
+          <button data-mode="cycling">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3.2"/><circle cx="18" cy="17" r="3.2"/><path d="M6 17l4-8h4l3 8M10 9h5M8 9l2-4h3"/></svg>
+          </button>
         </div>
       </div>
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
@@ -409,7 +498,7 @@
         <p class="sheet-title" id="sheetTitle">Destination</p>
         <div class="sheet-stats">
           <span><b id="sheetDist">—</b> mi</span>
-          <span><b id="sheetTime">—</b> min drive</span>
+          <span><b id="sheetTime">—</b> <span id="sheetTimeLabel">min drive</span></span>
         </div>
         <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
@@ -515,6 +604,8 @@
     nightRain:{stops:['#0E1320','#232A3B','#39415A'], light:false},
   };
   function applySky(name){
+    if(themeOverride === 'light') name = 'dayClear';
+    else if(themeOverride === 'dark') name = 'nightClear';
     const p = PRESETS[name] || PRESETS.dayClear;
     const root = document.documentElement;
     root.style.setProperty('--sky-1', p.stops[0]);
@@ -584,6 +675,7 @@
 
   /* ---------------- WEATHER STATE ---------------- */
   const weatherState = {loaded:false, loading:false, unit:'f', lat:null, lon:null, data:null, place:'Your Location'};
+  let themeOverride = 'auto'; // 'auto' | 'light' | 'dark' — set from Settings
   // Default unit by locale
   try{
     if(!/en-US/i.test(navigator.language||'')) weatherState.unit = 'c';
@@ -607,6 +699,34 @@
   }
   updateClockAndGreeting();
   setInterval(updateClockAndGreeting, 30000);
+
+  /* ---------------- SETTINGS ---------------- */
+  document.getElementById('settingsBtn').addEventListener('click', ()=>{
+    document.querySelectorAll('#settingsUnit button').forEach(b=> b.classList.toggle('active', b.dataset.unit===weatherState.unit));
+    document.querySelectorAll('#settingsTheme button').forEach(b=> b.classList.toggle('active', b.dataset.theme===themeOverride));
+    document.querySelectorAll('#settingsVoice button').forEach(b=> b.classList.toggle('active', b.dataset.voice===(voiceOn?'on':'off')));
+    document.getElementById('settingsOverlay').classList.add('show');
+  });
+  document.getElementById('settingsClose').addEventListener('click', ()=> document.getElementById('settingsOverlay').classList.remove('show'));
+  document.getElementById('settingsUnit').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    weatherState.unit = b.dataset.unit;
+    document.querySelectorAll('#settingsUnit button').forEach(x=> x.classList.toggle('active', x===b));
+    document.querySelectorAll('#unitToggle button').forEach(x=> x.classList.toggle('active', x.dataset.unit===weatherState.unit));
+    if(weatherState.lat!=null) fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
+  });
+  document.getElementById('settingsTheme').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    themeOverride = b.dataset.theme;
+    document.querySelectorAll('#settingsTheme button').forEach(x=> x.classList.toggle('active', x===b));
+    if(weatherState.loaded && weatherState.data) renderWeather(weatherState.data, weatherState.place, weatherState.aqi, weatherState.alerts);
+    else updateClockAndGreeting();
+  });
+  document.getElementById('settingsVoice').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    voiceOn = b.dataset.voice === 'on';
+    document.querySelectorAll('#settingsVoice button').forEach(x=> x.classList.toggle('active', x===b));
+  });
 
   document.getElementById('unitToggle').addEventListener('click', (e)=>{
     const b = e.target.closest('button'); if(!b) return;
@@ -645,12 +765,64 @@
         reverseGeocode(weatherState.lat, weatherState.lon).then(name=>{
           weatherState.place = name;
           fetchWeather(weatherState.lat, weatherState.lon, name);
+          setCurrentLocationEntry(weatherState.lat, weatherState.lon, name);
         });
       },
       err => { showWeatherManualSearch(geoErrorMessage(err)); },
       {timeout:8000, maximumAge:300000}
     );
   }
+
+  /* ---------------- SAVED LOCATIONS ---------------- */
+  let savedLocations = [], activeLocIdx = -1;
+  function renderLocChips(){
+    const row = document.getElementById('locChipRow');
+    row.innerHTML = savedLocations.map((loc,i)=>`
+        <button type="button" class="loc-chip ${i===activeLocIdx?'active':''}" data-i="${i}">
+          ${loc.isCurrent ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>` : ''}
+          ${escapeHtml(loc.name)}
+        </button>`).join('') +
+      `<button type="button" class="loc-chip-add" id="locAddBtn" aria-label="Add a location">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+       </button>`;
+    row.querySelectorAll('.loc-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=> switchToLocation(parseInt(btn.dataset.i, 10)));
+    });
+    document.getElementById('locAddBtn').addEventListener('click', ()=>{
+      const box = document.getElementById('locAddBox');
+      const show = box.style.display === 'none' || !box.style.display;
+      box.style.display = show ? 'block' : 'none';
+      if(show) document.getElementById('locAddInput').focus();
+    });
+  }
+  function switchToLocation(i){
+    activeLocIdx = i;
+    renderLocChips();
+    const loc = savedLocations[i];
+    if(loc.isCurrent) initWeather();
+    else fetchWeather(loc.lat, loc.lon, loc.name);
+  }
+  function setCurrentLocationEntry(lat, lon, name){
+    const entry = {lat, lon, name, isCurrent:true};
+    if(savedLocations[0] && savedLocations[0].isCurrent) savedLocations[0] = entry;
+    else savedLocations.unshift(entry);
+    activeLocIdx = 0;
+    renderLocChips();
+  }
+  function addLocationEntry(lat, lon, name){
+    const existingIdx = savedLocations.findIndex(l=> !l.isCurrent && Math.abs(l.lat-lat)<0.05 && Math.abs(l.lon-lon)<0.05);
+    if(existingIdx >= 0){ activeLocIdx = existingIdx; }
+    else{ savedLocations.push({lat, lon, name, isCurrent:false}); activeLocIdx = savedLocations.length - 1; }
+    renderLocChips();
+  }
+  renderLocChips();
+  attachAutocomplete(document.getElementById('locAddInput'), document.getElementById('locAddSuggest'), sel=>{
+    if(!sel) return;
+    addLocationEntry(sel.lat, sel.lon, sel.short);
+    fetchWeather(sel.lat, sel.lon, sel.short);
+    document.getElementById('locAddInput').value = '';
+    document.getElementById('locAddBox').style.display = 'none';
+  });
 
   function showWeatherManualSearch(message){
     weatherState.loading = false;
@@ -674,6 +846,7 @@
       if(citySelected){
         weatherState.lat = citySelected.lat; weatherState.lon = citySelected.lon; weatherState.place = citySelected.short;
         fetchWeather(citySelected.lat, citySelected.lon, citySelected.short);
+        addLocationEntry(citySelected.lat, citySelected.lon, citySelected.short);
         return;
       }
       const q = cityInput.value.trim();
@@ -683,6 +856,7 @@
         if(!res){ if(errEl) errEl.textContent = "Couldn't find that place. Try picking a suggestion, or add a state/country."; return; }
         weatherState.lat = res.lat; weatherState.lon = res.lon; weatherState.place = res.name;
         fetchWeather(res.lat, res.lon, res.name);
+        addLocationEntry(res.lat, res.lon, res.name);
       }).catch(()=>{ if(errEl) errEl.textContent = 'Search failed — check your connection and try again.'; });
     };
     document.getElementById('citySearchGo').addEventListener('click', go);
@@ -750,15 +924,76 @@
     }
     return out;
   }
+  // Live geocoders sometimes rank a famous park/monument oddly (or a
+  // same-named street above it), so well-known ones are matched from a
+  // built-in list first — instant, and always finds them.
+  const LANDMARKS = [
+    ['Acadia National Park','Maine',44.3386,-68.2733],['Arches National Park','Utah',38.7331,-109.5925],
+    ['Badlands National Park','South Dakota',43.8554,-102.3397],['Big Bend National Park','Texas',29.1275,-103.2425],
+    ['Biscayne National Park','Florida',25.4823,-80.2081],['Black Canyon of the Gunnison National Park','Colorado',38.5754,-107.7416],
+    ['Bryce Canyon National Park','Utah',37.5930,-112.1871],['Canyonlands National Park','Utah',38.3269,-109.8783],
+    ['Capitol Reef National Park','Utah',38.3670,-111.2615],['Carlsbad Caverns National Park','New Mexico',32.1478,-104.5567],
+    ['Channel Islands National Park','California',34.0069,-119.7785],['Congaree National Park','South Carolina',33.7948,-80.7784],
+    ['Crater Lake National Park','Oregon',42.8684,-122.1685],['Cuyahoga Valley National Park','Ohio',41.2808,-81.5678],
+    ['Death Valley National Park','California',36.5054,-117.0794],['Denali National Park','Alaska',63.1148,-151.1926],
+    ['Dry Tortugas National Park','Florida',24.6285,-82.8730],['Everglades National Park','Florida',25.2866,-80.8987],
+    ['Gates of the Arctic National Park','Alaska',67.7793,-153.3004],['Gateway Arch National Park','Missouri',38.6247,-90.1848],
+    ['Glacier National Park','Montana',48.7596,-113.7870],['Glacier Bay National Park','Alaska',58.6658,-136.9002],
+    ['Grand Canyon National Park','Arizona',36.1069,-112.1129],['Grand Teton National Park','Wyoming',43.7904,-110.6818],
+    ['Great Basin National Park','Nevada',38.9833,-114.3000],['Great Sand Dunes National Park','Colorado',37.7916,-105.5943],
+    ['Great Smoky Mountains National Park','Tennessee',35.6118,-83.4895],['Guadalupe Mountains National Park','Texas',31.9231,-104.8722],
+    ['Haleakala National Park','Hawaii',20.7204,-156.1552],['Hawaii Volcanoes National Park','Hawaii',19.4194,-155.2885],
+    ['Hot Springs National Park','Arkansas',34.5217,-93.0424],['Indiana Dunes National Park','Indiana',41.6533,-87.0524],
+    ['Isle Royale National Park','Michigan',48.0998,-88.5568],['Joshua Tree National Park','California',33.8734,-115.9010],
+    ['Katmai National Park','Alaska',58.6132,-155.0087],['Kenai Fjords National Park','Alaska',59.9166,-149.6538],
+    ['Kings Canyon National Park','California',36.8879,-118.5551],['Kobuk Valley National Park','Alaska',67.3878,-159.2846],
+    ['Lake Clark National Park','Alaska',60.9673,-153.4173],['Lassen Volcanic National Park','California',40.4977,-121.4207],
+    ['Mammoth Cave National Park','Kentucky',37.1862,-86.1000],['Mesa Verde National Park','Colorado',37.1836,-108.4618],
+    ['Mount Rainier National Park','Washington',46.8800,-121.7269],['New River Gorge National Park','West Virginia',37.9298,-81.0665],
+    ['North Cascades National Park','Washington',48.7718,-121.2985],['Olympic National Park','Washington',47.8021,-123.6044],
+    ['Petrified Forest National Park','Arizona',34.9100,-109.8068],['Pinnacles National Park','California',36.4906,-121.1825],
+    ['Redwood National Park','California',41.2132,-124.0046],['Rocky Mountain National Park','Colorado',40.3428,-105.6836],
+    ['Saguaro National Park','Arizona',32.2967,-110.7500],['Sequoia National Park','California',36.4864,-118.5658],
+    ['Shenandoah National Park','Virginia',38.4755,-78.4581],['Theodore Roosevelt National Park','North Dakota',46.9789,-103.5382],
+    ['Virgin Islands National Park','U.S. Virgin Islands',18.3419,-64.7333],['Voyageurs National Park','Minnesota',48.4839,-92.8386],
+    ['White Sands National Park','New Mexico',32.7871,-106.1737],['Wind Cave National Park','South Dakota',43.5725,-103.4783],
+    ['Wrangell-St. Elias National Park','Alaska',61.7104,-142.9853],['Yellowstone National Park','Wyoming',44.4280,-110.5885],
+    ['Yosemite National Park','California',37.8651,-119.5383],['Zion National Park','Utah',37.2982,-113.0263],
+    ['Statue of Liberty National Monument','New York',40.6892,-74.0445],['Devils Tower National Monument','Wyoming',44.5902,-104.7146],
+    ['Mount Rushmore National Memorial','South Dakota',43.8791,-103.4591],['Muir Woods National Monument','California',37.8967,-122.5811],
+    ['Cabrillo National Monument','California',32.6722,-117.2417],['Canyon de Chelly National Monument','Arizona',36.1616,-109.3781],
+    ['Chaco Culture National Historical Park','New Mexico',36.0608,-107.9613],['Craters of the Moon National Monument','Idaho',43.4165,-113.5163],
+    ['Dinosaur National Monument','Colorado',40.4373,-108.9713],['Effigy Mounds National Monument','Iowa',43.0908,-91.1926],
+    ['El Morro National Monument','New Mexico',34.9942,-108.3467],['Florissant Fossil Beds National Monument','Colorado',38.9098,-105.2864],
+    ['Fort Sumter National Monument','South Carolina',32.7524,-79.8748],['Gila Cliff Dwellings National Monument','New Mexico',33.2270,-108.2717],
+    ['Grand Staircase-Escalante National Monument','Utah',37.5116,-111.5654],['Hovenweep National Monument','Utah',37.3839,-109.0771],
+    ['Jewel Cave National Monument','South Dakota',43.7332,-103.8296],['Montezuma Castle National Monument','Arizona',34.6122,-111.8377],
+    ['Mount St. Helens National Volcanic Monument','Washington',46.1912,-122.1944],['Natural Bridges National Monument','Utah',37.6009,-110.0157],
+    ['Organ Pipe Cactus National Monument','Arizona',31.9518,-112.8004],['Petroglyph National Monument','New Mexico',35.1483,-106.7466],
+    ['Pipe Spring National Monument','Arizona',36.8636,-112.7377],['Rainbow Bridge National Monument','Utah',37.0785,-110.9636],
+    ['Scotts Bluff National Monument','Nebraska',41.8306,-103.7098],['Sunset Crater Volcano National Monument','Arizona',35.3644,-111.5013],
+    ['Timpanogos Cave National Monument','Utah',40.4374,-111.7092],['Tonto National Monument','Arizona',33.6478,-111.1082],
+    ['Tuzigoot National Monument','Arizona',34.7681,-112.0244],['Walnut Canyon National Monument','Arizona',35.1706,-111.5083],
+    ['Wupatki National Monument','Arizona',35.5203,-111.3854],['Bandelier National Monument','New Mexico',35.7784,-106.2733]
+  ].map(([name, state, lat, lon])=> ({lat, lon, short:`${name}, ${state}`, full:`${name}, ${state}`}));
+
+  function searchLandmarks(query, count){
+    const q = query.trim().toLowerCase();
+    if(q.length < 2) return [];
+    return LANDMARKS.filter(p=> p.short.toLowerCase().includes(q)).slice(0, count);
+  }
+
   async function searchPlaces(query, count=6){
+    const localMatches = searchLandmarks(query, count);
     const [om, nom] = await Promise.all([fetchOpenMeteo(query, count), fetchNominatim(query, count)]);
     const looksLikeAddress = /^\d/.test(query.trim());
-    let merged = dedupePlaces(looksLikeAddress ? [...nom.results, ...om.results] : [...om.results, ...nom.results]).slice(0, count);
+    const liveResults = looksLikeAddress ? [...nom.results, ...om.results] : [...om.results, ...nom.results];
+    let merged = dedupePlaces([...localMatches, ...liveResults]).slice(0, count);
     if(merged.length===0 && query.includes(',')){
       const shortQ = query.split(',')[0].trim();
       if(shortQ && shortQ !== query) return searchPlaces(shortQ, count);
     }
-    return {results: merged, error: (!om.ok && !nom.ok) ? 'unreachable' : null};
+    return {results: merged, error: (!om.ok && !nom.ok && !localMatches.length) ? 'unreachable' : null};
   }
   async function geocodeCity(q){
     const {results, error} = await searchPlaces(q, 1);
@@ -874,26 +1109,43 @@
         `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max`+
         `&timezone=auto&forecast_days=8`;
       const aqUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi&timezone=auto`;
+      // NWS only covers the US; queries elsewhere just come back empty, which
+      // is treated the same as "no active alerts" rather than an error.
+      const alertsUrl = `https://api.weather.gov/alerts/active?point=${lat},${lon}`;
 
-      const [wRes, aqRes] = await Promise.all([
+      const [wRes, aqRes, alertRes] = await Promise.all([
         fetch(wUrl),
-        fetch(aqUrl).catch(()=>null)
+        fetch(aqUrl).catch(()=>null),
+        fetch(alertsUrl, {headers:{'Accept':'application/geo+json'}}).catch(()=>null)
       ]);
       const w = await wRes.json();
       let aqi = null;
       if(aqRes){ try{ const aq = await aqRes.json(); aqi = aq.current ? aq.current.us_aqi : null; }catch(e){} }
+      let alerts = [];
+      if(alertRes && alertRes.ok){ try{ const aj = await alertRes.json(); alerts = (aj.features||[]).map(f=>f.properties); }catch(e){} }
 
       weatherState.data = w;
       weatherState.aqi = aqi;
+      weatherState.alerts = alerts;
       weatherState.loaded = true;
       weatherState.loading = false;
-      renderWeather(w, placeName, aqi);
+      renderWeather(w, placeName, aqi, alerts);
     }catch(e){
       showWeatherManualSearch("Couldn't load the forecast.");
     }
   }
 
-  function renderWeather(w, placeName, aqi){
+  function alertBannerHtml(alerts){
+    if(!alerts || !alerts.length) return '';
+    const sevColor = {Extreme:'#B0263D', Severe:'#C24A2D', Moderate:'#B8862E', Minor:'#6b7280'};
+    return `<div class="alert-banner">${alerts.slice(0,3).map(a=>`
+        <details class="alert-item">
+          <summary style="border-left-color:${sevColor[a.severity]||'#6b7280'}">${escapeHtml(a.event)}</summary>
+          <p>${escapeHtml(a.headline || a.description ? (a.headline || a.description).slice(0,240) : '')}</p>
+        </details>`).join('')}</div>`;
+  }
+
+  function renderWeather(w, placeName, aqi, alerts){
     const cur = w.current;
     const daily = w.daily;
     const hourly = w.hourly;
@@ -970,6 +1222,7 @@
       </svg>`;
 
     const html = `
+      ${alertBannerHtml(alerts)}
       <p class="loc-name">${placeName}</p>
       <p class="loc-date">${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
       <div class="now-icon">${iconFor(cur.weather_code, isDay)}</div>
@@ -1010,6 +1263,53 @@
   let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
   let originSelected = null, destSelected = null;
   const DEFAULT_CENTER = [41.1865, -73.1952]; // Bridgeport, CT fallback
+
+  // The main OSRM demo server only routes cars; walking/cycling use OSRM's
+  // German community demo instances, which host the foot/bike profiles.
+  let travelMode = 'driving';
+  const ROUTE_PROFILES = {
+    driving: {base:'https://router.project-osrm.org/route/v1/driving', profile:'driving', timeLabel:'min drive'},
+    walking: {base:'https://routing.openstreetmap.de/routed-foot/route/v1/foot', profile:'foot', timeLabel:'min walk'},
+    cycling: {base:'https://routing.openstreetmap.de/routed-bike/route/v1/bike', profile:'bike', timeLabel:'min ride'}
+  };
+  document.getElementById('travelModeToggle').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    travelMode = b.dataset.mode;
+    document.querySelectorAll('#travelModeToggle button').forEach(x=> x.classList.toggle('active', x===b));
+    document.getElementById('sheetTimeLabel').textContent = ROUTE_PROFILES[travelMode].timeLabel;
+    if(destSelected || document.getElementById('destInput').value.trim()) routeTo();
+  });
+
+  /* ---------------- RECENT DESTINATIONS ---------------- */
+  let recentDestinations = [];
+  function renderRecentChips(){
+    const row = document.getElementById('recentChipRow');
+    if(!recentDestinations.length){ row.innerHTML = ''; row.style.display = 'none'; return; }
+    row.innerHTML = recentDestinations.map((d,i)=> `<button type="button" class="recent-chip" data-i="${i}">${escapeHtml(d.short)}</button>`).join('');
+    row.querySelectorAll('.recent-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const d = recentDestinations[parseInt(btn.dataset.i, 10)];
+        document.getElementById('destInput').value = d.short;
+        destSelected = d;
+        row.style.display = 'none';
+        routeTo();
+      });
+    });
+    if(!document.getElementById('destInput').value.trim()) row.style.display = 'flex';
+  }
+  function addRecentDestination(d){
+    recentDestinations = recentDestinations.filter(r=> !(Math.abs(r.lat-d.lat)<0.01 && Math.abs(r.lon-d.lon)<0.01));
+    recentDestinations.unshift({lat:d.lat, lon:d.lon, short:d.name});
+    recentDestinations = recentDestinations.slice(0, 5);
+    renderRecentChips();
+  }
+  document.getElementById('destInput').addEventListener('input', ()=>{
+    const empty = !document.getElementById('destInput').value.trim();
+    document.getElementById('recentChipRow').style.display = (empty && recentDestinations.length) ? 'flex' : 'none';
+  });
+  document.getElementById('destInput').addEventListener('focus', ()=>{
+    if(!document.getElementById('destInput').value.trim() && recentDestinations.length) document.getElementById('recentChipRow').style.display = 'flex';
+  });
 
   function pulseDivIcon(color){
     return L.divIcon({
@@ -1210,6 +1510,7 @@
       dest = null;
     }
     if(!dest){ setNavStatus(''); showNavBanner('No results for that destination. Pick a suggestion, or add a state/country.'); return; }
+    addRecentDestination(dest);
 
     if(userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([origin.lat, origin.lon], {icon:pulseDivIcon('#3B82F6')}).addTo(map);
@@ -1220,7 +1521,8 @@
     routesData = [];
     selectedRouteIdx = 0;
     try{
-      const rUrl = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
+      const profile = ROUTE_PROFILES[travelMode];
+      const rUrl = `${profile.base}/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
       const rr = await fetch(rUrl);
       if(rr.ok){
         const rj = await rr.json();
@@ -1229,6 +1531,7 @@
     }catch(e){ /* fall through to straight-line fallback below */ }
 
     clearRouteLines();
+    document.getElementById('sheetTimeLabel').textContent = ROUTE_PROFILES[travelMode].timeLabel;
 
     if(routesData.length){
       renderRoutes();
@@ -1435,6 +1738,7 @@
     document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
     closeTbt();
+    renderRecentChips();
   });
 
 })();
