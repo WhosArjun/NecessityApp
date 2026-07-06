@@ -227,7 +227,8 @@
   .nav-top{position:absolute; top:0; left:0; right:0; z-index:5; padding:16px 16px 0; display:flex; flex-direction:column; gap:8px;}
   .nav-search{
     display:flex; align-items:center; gap:10px; padding:6px 8px 6px 16px; border-radius:999px;
-    background:rgba(255,255,255,.94); border:1px solid rgba(0,0,0,.06); box-shadow:0 8px 24px rgba(0,0,0,.18);
+    background:rgba(255,255,255,.9); border:1px solid rgba(255,255,255,.58); box-shadow:0 10px 30px rgba(8,15,28,.2);
+    backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%);
   }
   .nav-search input{flex:1; border:0; outline:none; font-size:15px; background:transparent; padding:8px 0; color:#1B1F2A;}
   .nav-search input::placeholder{color:#8b93a1;}
@@ -290,17 +291,41 @@
     display:flex; align-items:center; justify-content:center; color:#1B1F2A;
   }
   .locate-btn svg{width:20px; height:20px;}
+  .map-tools{
+    position:absolute; right:16px; bottom:204px; z-index:6; display:flex; flex-direction:column; gap:9px;
+  }
+  .map-tool-btn{
+    width:44px; height:44px; border-radius:50%; border:1px solid rgba(255,255,255,.7);
+    background:rgba(255,255,255,.92); color:#1B1F2A; box-shadow:0 8px 22px rgba(0,0,0,.2);
+    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(16px);
+  }
+  .map-tool-btn svg{width:19px; height:19px;}
   .nav-sheet{
     position:absolute; left:0; right:0; bottom:0; z-index:6; transform:translateY(110%);
     transition:transform .32s cubic-bezier(.2,.8,.3,1);
-    background:rgba(255,255,255,.96); backdrop-filter:blur(20px);
-    border-radius:26px 26px 0 0; padding:16px 22px 26px; box-shadow:0 -10px 40px rgba(0,0,0,.25); color:#1B1F2A;
+    background:linear-gradient(180deg, rgba(255,255,255,.97), rgba(246,248,251,.94)); backdrop-filter:blur(22px) saturate(150%);
+    border-top:1px solid rgba(255,255,255,.72); border-radius:26px 26px 0 0; padding:16px 22px 26px; box-shadow:0 -10px 40px rgba(0,0,0,.25); color:#1B1F2A;
   }
   .nav-sheet.show{transform:translateY(0);}
   .sheet-handle{width:36px; height:4px; border-radius:2px; background:#d6d9e0; margin:0 auto 14px;}
   .sheet-title{font-family:var(--font-display); font-size:20px; font-weight:500; margin:0 0 4px;}
   .sheet-stats{display:flex; gap:18px; margin:8px 0 16px; font-size:13.5px; color:#6b7280;}
   .sheet-stats b{color:#1B1F2A; font-size:15px;}
+  .route-insight{display:none; gap:10px; margin:-2px 0 14px;}
+  .route-insight.show{display:grid; grid-template-columns:1fr 1fr 1fr;}
+  .insight-pill{
+    min-width:0; border-radius:14px; background:#EEF6EA; color:#24331D; padding:10px 9px;
+    border:1px solid rgba(42,66,30,.08);
+  }
+  .insight-pill:nth-child(2){background:#EEF4FF; color:#1B315D;}
+  .insight-pill:nth-child(3){background:#FFF5E8; color:#5D3516;}
+  .insight-pill span{display:block; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; opacity:.58; white-space:nowrap;}
+  .insight-pill b{display:block; margin-top:3px; font-size:12px; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .route-progress{
+    height:6px; border-radius:999px; background:rgba(27,31,42,.08); overflow:hidden; margin:0 0 14px; display:none;
+  }
+  .route-progress.show{display:block;}
+  .route-progress i{display:block; height:100%; width:42%; border-radius:inherit; background:linear-gradient(90deg,#B7F36B,#3B82F6);}
   .sheet-actions{display:flex; gap:10px;}
   .sheet-actions button{flex:1; padding:12px; border-radius:14px; border:0; font-weight:700; font-size:14px;}
   .sheet-actions .primary{background:#1B1F2A; color:#fff;}
@@ -530,6 +555,14 @@
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
+      <div class="map-tools" aria-label="Map tools">
+        <button class="map-tool-btn" id="fitRouteBtn" aria-label="Fit route on map">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M7 12h10"/></svg>
+        </button>
+        <button class="map-tool-btn" id="mapStyleBtn" aria-label="Change map style">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
+        </button>
+      </div>
       <div class="nav-status" id="navStatus"></div>
       <div class="nav-sheet" id="navSheet">
         <div class="sheet-handle"></div>
@@ -538,6 +571,12 @@
           <span><b id="sheetDist">—</b> mi</span>
           <span><b id="sheetTime">—</b> <span id="sheetTimeLabel">min drive</span></span>
         </div>
+        <div class="route-insight" id="routeInsight">
+          <div class="insight-pill"><span>Leave</span><b id="insightLeave">Now</b></div>
+          <div class="insight-pill"><span>Turns</span><b id="insightTurns">—</b></div>
+          <div class="insight-pill"><span>Arrive</span><b id="insightArrive">—</b></div>
+        </div>
+        <div class="route-progress" id="routeProgress"><i id="routeProgressFill"></i></div>
         <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
           <button class="ghost" id="clearRoute">Clear</button>
@@ -1355,10 +1394,23 @@
   }
 
   /* ---------------- NAVIGATE ---------------- */
-  let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
+  let map, baseTileLayer, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
   let poiLayer = [];
   let originSelected = null, destSelected = null;
   const DEFAULT_CENTER = [41.1865, -73.1952]; // Bridgeport, CT fallback
+  let mapTheme = 'standard';
+  const MAP_THEMES = {
+    standard: {
+      url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution:'© OpenStreetMap contributors',
+      label:'Standard'
+    },
+    topo: {
+      url:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      attribution:'Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap',
+      label:'Topo'
+    }
+  };
 
   // The main OSRM demo server only routes cars; walking/cycling use OSRM's
   // German community demo instances, which host the foot/bike profiles.
@@ -1504,9 +1556,7 @@
 
   function initMap(){
     map = L.map('map', {zoomControl:false, attributionControl:true}).setView(DEFAULT_CENTER, 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom:19, attribution:'© OpenStreetMap contributors'
-    }).addTo(map);
+    setMapTheme(mapTheme);
     L.control.zoom({position:'bottomright'}).addTo(map);
     locateUser({silentFail:true});
 
@@ -1553,6 +1603,10 @@
   }
 
   document.getElementById('locateBtn').addEventListener('click', ()=> locateUser());
+  document.getElementById('fitRouteBtn').addEventListener('click', focusRoute);
+  document.getElementById('mapStyleBtn').addEventListener('click', ()=>{
+    setMapTheme(mapTheme === 'standard' ? 'topo' : 'standard');
+  });
 
   function haversineMiles(lat1, lon1, lat2, lon2){
     const R = 3958.8, toRad = d=>d*Math.PI/180;
@@ -1586,6 +1640,49 @@
     routeLines = [];
   }
 
+  function setMapTheme(theme){
+    mapTheme = theme;
+    if(!map) return;
+    if(baseTileLayer) map.removeLayer(baseTileLayer);
+    const cfg = MAP_THEMES[mapTheme];
+    baseTileLayer = L.tileLayer(cfg.url, {
+      maxZoom:19,
+      attribution:cfg.attribution
+    }).addTo(map);
+    const btn = document.getElementById('mapStyleBtn');
+    if(btn) btn.setAttribute('aria-label', `Map style: ${cfg.label}`);
+    routeLines.forEach(l=> l.bringToFront());
+  }
+
+  function focusRoute(){
+    const line = routeLines[selectedRouteIdx] || routeLines[0];
+    if(!line || !map) return;
+    map.fitBounds(line.getBounds(), {padding:[72,56]});
+  }
+
+  function countManeuvers(route){
+    if(!route || !route.legs) return 0;
+    return route.legs.reduce((total, leg)=> total + (leg.steps || []).filter(s=> s.maneuver && !['depart','arrive'].includes(s.maneuver.type)).length, 0);
+  }
+
+  function updateRouteInsight(route){
+    const insight = document.getElementById('routeInsight');
+    const progress = document.getElementById('routeProgress');
+    if(!route){
+      insight.classList.remove('show');
+      progress.classList.remove('show');
+      return;
+    }
+    const turns = countManeuvers(route);
+    const eta = new Date(Date.now() + (route.duration || 0) * 1000);
+    document.getElementById('insightLeave').textContent = 'Now';
+    document.getElementById('insightTurns').textContent = turns ? `${turns} turns` : 'Easy';
+    document.getElementById('insightArrive').textContent = eta.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    document.getElementById('routeProgressFill').style.width = Math.max(18, Math.min(82, 100 - Math.round((route.duration || 1) / 90))) + '%';
+    insight.classList.add('show');
+    progress.classList.add('show');
+  }
+
   // Draws every candidate route, highlighting whichever is selected; taps
   // on a non-selected line (or its chip) switch which one is highlighted.
   function renderRoutes(){
@@ -1612,6 +1709,7 @@
     const r = routesData[i];
     document.getElementById('sheetDist').textContent = (r.distance/1609.34).toFixed(1);
     document.getElementById('sheetTime').textContent = Math.round(r.duration/60);
+    updateRouteInsight(r);
     renderRouteChips();
   }
 
@@ -1679,6 +1777,7 @@
       map.fitBounds(bounds, {padding:[60,60]});
       document.getElementById('sheetDist').textContent = (routesData[0].distance/1609.34).toFixed(1);
       document.getElementById('sheetTime').textContent = Math.round(routesData[0].duration/60);
+      updateRouteInsight(routesData[0]);
       showNavBanner('');
       loadNearbyPOIs(bounds); // fire-and-forget — purely decorative, never blocks the route
     } else {
@@ -1693,6 +1792,7 @@
       document.getElementById('sheetDist').textContent = miles.toFixed(1) + ' (direct)';
       document.getElementById('sheetTime').textContent = '—';
       document.getElementById('routeOptions').innerHTML = '';
+      updateRouteInsight(null);
       showNavBanner('Live driving directions aren\'t reachable from this preview, so this shows a direct line and straight-line distance instead.');
     }
 
@@ -1919,6 +2019,7 @@
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
     document.getElementById('routeOptions').innerHTML = '';
+    updateRouteInsight(null);
     document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
     closeTbt();
