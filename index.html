@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sonder — Weather &amp; Navigate</title>
+<title>Sonder - Weather & Navigate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -217,7 +217,13 @@
 
   /* ---------- NAV ---------- */
   #view-nav{background:#0b0c10;}
-  #map{position:absolute; inset:0; z-index:0;}
+  .map-viewport{position:absolute; inset:0; overflow:hidden; z-index:0;}
+  .map-rotor{
+    position:absolute; top:50%; left:50%; width:180%; height:180%; margin:-90% 0 0 -90%;
+    transition:transform .35s linear;
+  }
+  #map{position:absolute; inset:0;}
+  .nav-live .leaflet-control-zoom{display:none !important;} /* hidden while driving, like a real nav app */
   .nav-top{position:absolute; top:0; left:0; right:0; z-index:5; padding:16px 16px 0; display:flex; flex-direction:column; gap:8px;}
   .nav-search{
     display:flex; align-items:center; gap:10px; padding:6px 8px 6px 16px; border-radius:999px;
@@ -306,52 +312,65 @@
   }
 
   /* ---------- IN-APP TURN-BY-TURN ---------- */
+  /* Compact turn-by-turn floats over the map by default; the full step list
+     only opens when the user asks for it, keeping the route visible. */
   .tbt-overlay{
-    position:absolute; inset:0; z-index:20; background:#F5F6F8; display:none; flex-direction:column; color:#1B1F2A;
+    position:absolute; left:14px; right:14px; bottom:14px; z-index:20; color:#F8FAFC;
+    background:linear-gradient(145deg, rgba(18,24,38,.92), rgba(28,36,52,.82));
+    border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 20px 50px rgba(0,0,0,.34); display:flex; flex-direction:column;
+    border-radius:24px; overflow:hidden; transform:translateY(calc(100% + 24px));
+    transition:transform .38s cubic-bezier(.2,.8,.3,1), left .28s ease, right .28s ease, top .28s ease, bottom .28s ease;
+    max-height:calc(100% - 112px);
   }
-  .tbt-overlay.show{display:flex;}
-  .tbt-header{
-    display:flex; align-items:center; gap:12px; padding:16px 18px 12px; background:#fff;
-    box-shadow:0 2px 10px rgba(0,0,0,.06); flex:0 0 auto;
-  }
-  .tbt-close{
-    width:36px; height:36px; border-radius:50%; border:0; background:#F0F1F4; color:#1B1F2A;
+  .tbt-overlay.show{transform:translateY(0);}
+  .tbt-overlay.expanded{top:78px; left:12px; right:auto; bottom:12px; width:236px; max-height:none;}
+  .tbt-header{display:flex; align-items:center; gap:8px; padding:12px 12px 4px; flex:0 0 auto;}
+  .tbt-close, .tbt-toggle{
+    width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.1); color:#fff;
     display:flex; align-items:center; justify-content:center; flex:0 0 auto;
   }
-  .tbt-close svg{width:16px; height:16px;}
-  .tbt-summary{font-size:13.5px; color:#6b7280; font-weight:600;}
-  .tbt-summary b{color:#1B1F2A; font-size:15px;}
-  .tbt-next{
-    margin:16px 18px 10px; background:#1B1F2A; color:#fff; border-radius:24px; padding:18px 20px;
-    display:flex; align-items:center; gap:16px; flex:0 0 auto;
-  }
+  .tbt-close svg, .tbt-toggle svg{width:15px; height:15px;}
+  .tbt-toggle{width:auto; border-radius:999px; padding:0 12px; gap:6px; font-size:11.5px; font-weight:800; letter-spacing:.01em;}
+  .tbt-mute-inline{margin-left:auto;}
+  .tbt-current{display:flex; align-items:center; gap:12px; padding:8px 14px 14px; flex:0 0 auto;}
   .tbt-next-icon{
     width:46px; height:46px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
-    background:rgba(255,255,255,.14); border-radius:15px;
+    background:#B7F36B; color:#16210D; border-radius:16px; box-shadow:0 10px 24px rgba(183,243,107,.24);
   }
-  .tbt-next-icon svg{width:26px; height:26px;}
-  .tbt-next-dist{font-family:var(--font-display); font-size:23px; font-weight:500; line-height:1.1;}
-  .tbt-next-instr{font-size:13.5px; color:rgba(255,255,255,.78); margin-top:3px;}
-  .tbt-start-btn{
-    margin:2px 18px 12px; padding:14px; border-radius:16px; border:0; background:#3B82F6; color:#fff;
-    font-weight:700; font-size:15px; flex:0 0 auto;
-  }
-  .tbt-start-btn.active{background:#E24A4A;}
-  .tbt-steps{flex:1; overflow-y:auto; padding:4px 12px 30px;}
-  .tbt-step{display:flex; align-items:center; gap:14px; padding:13px 8px; border-bottom:1px solid #E9EBEF;}
-  .tbt-step.active{background:rgba(59,130,246,.08); border-radius:14px;}
+  .tbt-next-icon svg{width:24px; height:24px;}
+  .tbt-next-dist{font-family:var(--font-display); font-size:28px; font-weight:600; line-height:1; color:#fff;}
+  .tbt-next-instr{font-size:13px; color:rgba(248,250,252,.76); margin-top:4px; line-height:1.28; font-weight:700;}
+  .tbt-steps{display:none; flex:1; overflow-y:auto; padding:2px 10px 8px; border-top:1px solid rgba(255,255,255,.11);}
+  .tbt-overlay.expanded .tbt-steps{display:block;}
+  .tbt-step{display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,.09);}
+  .tbt-step.active{background:rgba(183,243,107,.1); border-radius:12px;}
   .tbt-step-icon{
-    width:32px; height:32px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#1B1F2A;
+    width:28px; height:28px; border-radius:10px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#B7F36B;
+    background:rgba(255,255,255,.08);
   }
-  .tbt-step-icon svg{width:20px; height:20px;}
-  .tbt-step-instr{font-size:14px; font-weight:600;}
-  .tbt-step-dist{font-size:12.5px; color:#8b93a1; margin-top:2px;}
-  .tbt-arrived{
-    margin:16px 18px; padding:16px 20px; border-radius:18px; background:rgba(59,130,246,.1);
-    color:#1B1F2A; font-weight:700; text-align:center;
+  .tbt-step-icon svg{width:16px; height:16px;}
+  .tbt-step-instr{font-size:12px; font-weight:700; line-height:1.25; color:#F8FAFC;}
+  .tbt-step-dist{font-size:10.5px; color:rgba(248,250,252,.55); margin-top:2px; font-weight:700;}
+  .tbt-panel-bottom{flex:0 0 auto; padding:12px 14px 14px; border-top:1px solid rgba(255,255,255,.11); background:rgba(7,10,16,.18);}
+  .tbt-summary{font-size:16px; font-weight:800; color:#fff; line-height:1.3;}
+  .tbt-summary small{display:block; font-size:11px; font-weight:700; color:rgba(248,250,252,.58); margin-top:1px;}
+  .tbt-dash{display:none; align-items:baseline; gap:6px; font-size:11.5px; color:rgba(248,250,252,.68); font-weight:700; margin-top:6px;}
+  .tbt-dash b{font-family:var(--font-display); font-size:16px; color:#B7F36B; font-weight:600;}
+  .tbt-start-btn{
+    margin-top:10px; width:100%; padding:12px; border-radius:16px; border:0; background:#B7F36B; color:#16210D;
+    font-weight:800; font-size:13.5px; box-shadow:0 12px 26px rgba(183,243,107,.2);
   }
+  .tbt-start-btn.active{background:#FF6B6B; color:#fff; box-shadow:none;}
+  .tbt-overlay:not(.expanded) .tbt-panel-bottom{display:grid; grid-template-columns:1fr 1.15fr; gap:10px; align-items:end;}
+  .tbt-overlay:not(.expanded) .tbt-start-btn{margin-top:0;}
   .settings-label{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8b93a1; margin:22px 2px 8px;}
   .settings-note{font-size:12.5px; color:#9aa3b0; margin-top:28px; line-height:1.5;}
+  .settings-overlay{
+    position:absolute; inset:0; z-index:25; background:#F5F6F8; color:#1B1F2A;
+    display:none; flex-direction:column;
+  }
+  .settings-overlay.show{display:flex;}
 
   @media (prefers-reduced-motion: reduce){
     .sky{animation:none;}
@@ -408,12 +427,12 @@
     </section>
 
     <!-- SETTINGS -->
-    <div class="tbt-overlay" id="settingsOverlay" style="background:#F5F6F8;">
-      <div class="tbt-header">
-        <button class="tbt-close" id="settingsClose" aria-label="Close settings">
+    <div class="settings-overlay" id="settingsOverlay">
+      <div class="tbt-header" style="padding:16px 18px 12px;">
+        <button class="tbt-close" id="settingsClose" aria-label="Close settings" style="width:36px;height:36px;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <div class="tbt-summary" style="font-size:16px;">Settings</div>
+        <div style="font-size:16px; font-weight:700;">Settings</div>
       </div>
       <div style="padding:6px 20px 30px; overflow-y:auto;">
         <p class="settings-label">Temperature units</p>
@@ -468,7 +487,11 @@
 
     <!-- NAVIGATE -->
     <section class="view" id="view-nav">
-      <div id="map"></div>
+      <div class="map-viewport">
+        <div class="map-rotor" id="mapRotor">
+          <div id="map"></div>
+        </div>
+      </div>
       <button class="nav-back" id="navBack" aria-label="Back to home">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
@@ -524,23 +547,25 @@
 
       <div class="tbt-overlay" id="tbtOverlay">
         <div class="tbt-header">
-          <button class="tbt-close" id="tbtClose" aria-label="Close turn-by-turn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          </button>
-          <div class="tbt-summary"><b id="tbtDist">—</b> · <b id="tbtTime">—</b></div>
-          <button class="tbt-close" id="tbtMute" aria-label="Mute voice guidance" style="margin-left:auto;">
+          <button class="tbt-close" id="tbtClose" aria-label="Close turn-by-turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          <button class="tbt-toggle" id="tbtToggle" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg><span id="tbtToggleLabel">Directions</span></button>
+          <button class="tbt-close tbt-mute-inline" id="tbtMute" aria-label="Mute voice guidance">
             <svg id="tbtMuteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/></svg>
           </button>
         </div>
-        <div class="tbt-next" id="tbtNext">
+        <div class="tbt-current" id="tbtNext">
           <span class="tbt-next-icon" id="tbtNextIcon"></span>
-          <span>
+          <span style="flex:1; min-width:0;">
             <div class="tbt-next-dist" id="tbtNextDist">—</div>
             <div class="tbt-next-instr" id="tbtNextInstr">—</div>
           </span>
         </div>
-        <button class="tbt-start-btn" id="tbtStartBtn">Start Navigation</button>
         <div class="tbt-steps" id="tbtSteps"></div>
+        <div class="tbt-panel-bottom">
+          <div class="tbt-summary"><span id="tbtDist">—</span><small><span id="tbtTime">—</span></small></div>
+          <div class="tbt-dash" id="tbtDash"><b id="tbtSpeed">--</b> mph · ETA <b id="tbtEtaTime">—</b></div>
+          <button class="tbt-start-btn" id="tbtStartBtn">Start Navigation</button>
+        </div>
       </div>
     </section>
 
@@ -1331,6 +1356,7 @@
 
   /* ---------------- NAVIGATE ---------------- */
   let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
+  let poiLayer = [];
   let originSelected = null, destSelected = null;
   const DEFAULT_CENTER = [41.1865, -73.1952]; // Bridgeport, CT fallback
 
@@ -1392,6 +1418,49 @@
       className:'', html:`<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>`,
       iconSize:[30,40], iconAnchor:[15,40]
     });
+  }
+  function poiDivIcon(color, glyph){
+    return L.divIcon({
+      className:'',
+      html:`<div style="width:24px;height:24px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:12px;">${glyph}</div>`,
+      iconSize:[24,24], iconAnchor:[12,12]
+    });
+  }
+  function clearPOILayer(){
+    poiLayer.forEach(m=> map.removeLayer(m));
+    poiLayer = [];
+  }
+  // Real points of interest along the route — gas, food, coffee, parking —
+  // from OpenStreetMap via the free Overpass API. Purely decorative context,
+  // so any failure here is silent and never affects the actual route.
+  async function loadNearbyPOIs(bounds){
+    clearPOILayer();
+    try{
+      const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+      const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
+      const query = `[out:json][timeout:8];(node["amenity"="fuel"](${bbox});node["amenity"="restaurant"](${bbox});node["amenity"="cafe"](${bbox});node["amenity"="parking"](${bbox}););out center 30;`;
+      const r = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`, null, 9000);
+      if(!r.ok) return;
+      const j = await r.json();
+      const cats = {
+        fuel: {color:'#F59E0B', glyph:'⛽'},
+        restaurant: {color:'#E24A4A', glyph:'🍴'},
+        cafe: {color:'#8B5E34', glyph:'☕'},
+        parking: {color:'#3B82F6', glyph:'P'}
+      };
+      (j.elements || []).slice(0, 30).forEach(el=>{
+        const amenity = el.tags && el.tags.amenity;
+        const cat = cats[amenity];
+        if(!cat) return;
+        const lat = el.lat != null ? el.lat : (el.center && el.center.lat);
+        const lon = el.lon != null ? el.lon : (el.center && el.center.lon);
+        if(lat == null || lon == null) return;
+        const name = (el.tags && el.tags.name) || amenity.charAt(0).toUpperCase() + amenity.slice(1);
+        const marker = L.marker([lat, lon], {icon: poiDivIcon(cat.color, cat.glyph)}).bindPopup(escapeHtml(name));
+        marker.addTo(map);
+        poiLayer.push(marker);
+      });
+    }catch(e){ /* decorative only — fail silently */ }
   }
   // A Google-Maps-style "puck": a soft heading cone plus a chevron that
   // rotates to point the direction of travel. The rotor is a separate inner
@@ -1611,6 +1680,7 @@
       document.getElementById('sheetDist').textContent = (routesData[0].distance/1609.34).toFixed(1);
       document.getElementById('sheetTime').textContent = Math.round(routesData[0].duration/60);
       showNavBanner('');
+      loadNearbyPOIs(bounds); // fire-and-forget — purely decorative, never blocks the route
     } else {
       // Live routing unavailable — fall back to a direct line so the
       // feature still gives useful distance/direction information.
@@ -1633,7 +1703,7 @@
   document.getElementById('goBtn').addEventListener('click', routeTo);
 
   /* ---------------- IN-APP TURN-BY-TURN ---------------- */
-  let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null;
+  let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null, tbtExpanded = false;
   let voiceOn = true, lastNavPos = null, lastHeading = 0;
 
   function speak(text){
@@ -1685,11 +1755,22 @@
     return `${verb}${name}`;
   }
   function renderTbtSteps(){
-    document.getElementById('tbtSteps').innerHTML = tbtSteps.map((s,i)=>`
-      <div class="tbt-step ${i===tbtCurrentIdx?'active':''}" data-i="${i}">
-        <span class="tbt-step-icon">${maneuverIcon(s.maneuver.type, s.maneuver.modifier)}</span>
-        <div><div class="tbt-step-instr">${escapeHtml(describeStep(s))}</div><div class="tbt-step-dist">${formatDist(s.distance)}</div></div>
-      </div>`).join('');
+    document.getElementById('tbtSteps').innerHTML = tbtSteps.map((s,i)=>{
+        if(i <= tbtCurrentIdx) return '';
+        return `<div class="tbt-step" data-i="${i}">
+          <span class="tbt-step-icon">${maneuverIcon(s.maneuver.type, s.maneuver.modifier)}</span>
+          <div><div class="tbt-step-instr">${escapeHtml(describeStep(s))}</div><div class="tbt-step-dist">${formatDist(s.distance)}</div></div>
+        </div>`;
+      }).join('');
+  }
+  function setTbtExpanded(expanded){
+    tbtExpanded = expanded;
+    const overlay = document.getElementById('tbtOverlay');
+    const toggle = document.getElementById('tbtToggle');
+    const label = document.getElementById('tbtToggleLabel');
+    overlay.classList.toggle('expanded', expanded);
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    label.textContent = expanded ? 'One step' : 'Directions';
   }
   function updateTbtNext(){
     const s = tbtSteps[tbtCurrentIdx];
@@ -1697,6 +1778,14 @@
     document.getElementById('tbtNextIcon').innerHTML = maneuverIcon(s.maneuver.type, s.maneuver.modifier);
     document.getElementById('tbtNextInstr').textContent = describeStep(s);
     document.getElementById('tbtNextDist').textContent = formatDist(s.distance) || 'Now';
+  }
+  function updateTbtEta(){
+    let distM = 0, durS = 0;
+    for(let i = tbtCurrentIdx; i < tbtSteps.length; i++){ distM += tbtSteps[i].distance || 0; durS += tbtSteps[i].duration || 0; }
+    document.getElementById('tbtDist').textContent = (distM/1609.34).toFixed(1) + ' mi';
+    document.getElementById('tbtTime').textContent = Math.round(durS/60) + ' min left';
+    const eta = new Date(Date.now() + durS*1000);
+    document.getElementById('tbtEtaTime').textContent = eta.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
   }
   function setMuteIcon(){
     document.getElementById('tbtMuteIcon').innerHTML = voiceOn
@@ -1723,6 +1812,7 @@
     renderTbtSteps();
     updateTbtNext();
     setMuteIcon();
+    setTbtExpanded(false);
     document.getElementById('tbtOverlay').classList.add('show');
   }
   function stopTbtNav(){
@@ -1732,11 +1822,17 @@
     btn.classList.remove('active');
     window.speechSynthesis && window.speechSynthesis.cancel();
     lastNavPos = null;
+    document.getElementById('tbtOverlay').classList.remove('live');
+    document.getElementById('view-nav').classList.remove('nav-live');
+    document.getElementById('tbtDash').style.display = 'none';
+    document.getElementById('mapRotor').style.transform = 'rotate(0deg)';
+    if(map) map.dragging.enable();
     // Back to the plain location dot once navigation stops.
     if(userMarker){ const ll = userMarker.getLatLng(); map.removeLayer(userMarker); userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map); }
   }
   function closeTbt(){
     document.getElementById('tbtOverlay').classList.remove('show');
+    setTbtExpanded(false);
     stopTbtNav();
   }
   function startTbtNav(){
@@ -1745,6 +1841,12 @@
     btn.textContent = 'Stop Navigation';
     btn.classList.add('active');
     lastNavPos = null;
+    document.getElementById('tbtOverlay').classList.add('live');
+    document.getElementById('view-nav').classList.add('nav-live');
+    document.getElementById('tbtDash').style.display = 'flex';
+    updateTbtEta();
+    if(map) map.dragging.disable(); // heading-up rotation would fight manual dragging
+    map.setZoom(Math.max(map.getZoom(), 16));
     speak(`Starting navigation. ${describeStep(tbtSteps[0])}.`);
     tbtWatchId = navigator.geolocation.watchPosition(
       pos=>{
@@ -1769,7 +1871,16 @@
           if(userMarker) map.removeLayer(userMarker);
           userMarker = L.marker([lat, lon], {icon:navPuckIcon(heading)}).addTo(map);
         }
-        map.panTo([lat, lon]);
+        map.panTo([lat, lon], {animate:true, duration:0.4});
+        // Rotate the whole map so "up" always matches the direction of
+        // travel — the puck's own counter-rotation cancels out, so it stays
+        // pointing straight up on screen, Tesla/Google-nav style.
+        document.getElementById('mapRotor').style.transform = `rotate(${-heading}deg)`;
+
+        // Live speed readout, like a dashboard.
+        const mph = (pos.coords.speed != null && !isNaN(pos.coords.speed)) ? Math.round(pos.coords.speed * 2.23694) : null;
+        const speedEl = document.getElementById('tbtSpeed');
+        if(speedEl) speedEl.textContent = mph != null ? mph : '--';
 
         // Proactive voice prompts as you approach the upcoming maneuver.
         const s = tbtSteps[tbtCurrentIdx];
@@ -1788,6 +1899,7 @@
           }
         }
         updateTbtNext();
+        updateTbtEta();
       },
       err=> showNavBanner(geoErrorMessage(err)),
       {enableHighAccuracy:true, maximumAge:2000, timeout:10000}
@@ -1795,12 +1907,14 @@
   }
   document.getElementById('startTbt').addEventListener('click', openTurnByTurn);
   document.getElementById('tbtClose').addEventListener('click', closeTbt);
+  document.getElementById('tbtToggle').addEventListener('click', ()=> setTbtExpanded(!tbtExpanded));
   document.getElementById('tbtStartBtn').addEventListener('click', ()=>{
     if(tbtWatchId != null) stopTbtNav(); else startTbtNav();
   });
 
   document.getElementById('clearRoute').addEventListener('click', ()=>{
     clearRouteLines();
+    clearPOILayer();
     routesData = []; selectedRouteIdx = 0;
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
