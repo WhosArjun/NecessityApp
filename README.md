@@ -81,11 +81,11 @@ timeout and fails gracefully rather than hanging.
 ## Known limitations
 
 - **No data persistence.** Saved locations, recent destinations, and settings are
-  session-only (in-memory) and reset on page reload. This is intentional — the app
+  session-only (in-memory) and reset on page reload. This is intentional the app
   avoids browser storage APIs by design.
 - **No real-time hazard/traffic detection.** There is no live sensor or traffic feed
   behind this app, so it does not (and will not) simulate things like police
-  presence or roadside incidents — anything shown is either real map/weather data
+  presence or roadside incidents  anything shown is either real map/weather data
   or nothing at all.
 - **Weather alerts are US-only**, since they come from the National Weather Service.
 - **Routing servers are public demo instances**, not guaranteed for production
