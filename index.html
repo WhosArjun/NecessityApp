@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Necessity - Weather & Navigate</title>
+<title>Sonder — Weather &amp; Navigate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -217,18 +217,12 @@
 
   /* ---------- NAV ---------- */
   #view-nav{background:#0b0c10;}
-  .map-viewport{position:absolute; inset:0; overflow:hidden; z-index:0;}
-  .map-rotor{
-    position:absolute; top:50%; left:50%; width:180%; height:180%; margin:-90% 0 0 -90%;
-    transition:transform .35s linear;
-  }
-  #map{position:absolute; inset:0;}
+  #map{position:absolute; inset:0; z-index:0;}
   .nav-live .leaflet-control-zoom{display:none !important;} /* hidden while driving, like a real nav app */
   .nav-top{position:absolute; top:0; left:0; right:0; z-index:5; padding:16px 16px 0; display:flex; flex-direction:column; gap:8px;}
   .nav-search{
     display:flex; align-items:center; gap:10px; padding:6px 8px 6px 16px; border-radius:999px;
-    background:rgba(255,255,255,.9); border:1px solid rgba(255,255,255,.58); box-shadow:0 10px 30px rgba(8,15,28,.2);
-    backdrop-filter:blur(18px) saturate(150%); -webkit-backdrop-filter:blur(18px) saturate(150%);
+    background:rgba(255,255,255,.94); border:1px solid rgba(0,0,0,.06); box-shadow:0 8px 24px rgba(0,0,0,.18);
   }
   .nav-search input{flex:1; border:0; outline:none; font-size:15px; background:transparent; padding:8px 0; color:#1B1F2A;}
   .nav-search input::placeholder{color:#8b93a1;}
@@ -291,41 +285,17 @@
     display:flex; align-items:center; justify-content:center; color:#1B1F2A;
   }
   .locate-btn svg{width:20px; height:20px;}
-  .map-tools{
-    position:absolute; right:16px; bottom:204px; z-index:6; display:flex; flex-direction:column; gap:9px;
-  }
-  .map-tool-btn{
-    width:44px; height:44px; border-radius:50%; border:1px solid rgba(255,255,255,.7);
-    background:rgba(255,255,255,.92); color:#1B1F2A; box-shadow:0 8px 22px rgba(0,0,0,.2);
-    display:flex; align-items:center; justify-content:center; backdrop-filter:blur(16px);
-  }
-  .map-tool-btn svg{width:19px; height:19px;}
   .nav-sheet{
     position:absolute; left:0; right:0; bottom:0; z-index:6; transform:translateY(110%);
     transition:transform .32s cubic-bezier(.2,.8,.3,1);
-    background:linear-gradient(180deg, rgba(255,255,255,.97), rgba(246,248,251,.94)); backdrop-filter:blur(22px) saturate(150%);
-    border-top:1px solid rgba(255,255,255,.72); border-radius:26px 26px 0 0; padding:16px 22px 26px; box-shadow:0 -10px 40px rgba(0,0,0,.25); color:#1B1F2A;
+    background:rgba(255,255,255,.96); backdrop-filter:blur(20px);
+    border-radius:26px 26px 0 0; padding:16px 22px 26px; box-shadow:0 -10px 40px rgba(0,0,0,.25); color:#1B1F2A;
   }
   .nav-sheet.show{transform:translateY(0);}
   .sheet-handle{width:36px; height:4px; border-radius:2px; background:#d6d9e0; margin:0 auto 14px;}
   .sheet-title{font-family:var(--font-display); font-size:20px; font-weight:500; margin:0 0 4px;}
   .sheet-stats{display:flex; gap:18px; margin:8px 0 16px; font-size:13.5px; color:#6b7280;}
   .sheet-stats b{color:#1B1F2A; font-size:15px;}
-  .route-insight{display:none; gap:10px; margin:-2px 0 14px;}
-  .route-insight.show{display:grid; grid-template-columns:1fr 1fr 1fr;}
-  .insight-pill{
-    min-width:0; border-radius:14px; background:#EEF6EA; color:#24331D; padding:10px 9px;
-    border:1px solid rgba(42,66,30,.08);
-  }
-  .insight-pill:nth-child(2){background:#EEF4FF; color:#1B315D;}
-  .insight-pill:nth-child(3){background:#FFF5E8; color:#5D3516;}
-  .insight-pill span{display:block; font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; opacity:.58; white-space:nowrap;}
-  .insight-pill b{display:block; margin-top:3px; font-size:12px; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .route-progress{
-    height:6px; border-radius:999px; background:rgba(27,31,42,.08); overflow:hidden; margin:0 0 14px; display:none;
-  }
-  .route-progress.show{display:block;}
-  .route-progress i{display:block; height:100%; width:42%; border-radius:inherit; background:linear-gradient(90deg,#B7F36B,#3B82F6);}
   .sheet-actions{display:flex; gap:10px;}
   .sheet-actions button{flex:1; padding:12px; border-radius:14px; border:0; font-weight:700; font-size:14px;}
   .sheet-actions .primary{background:#1B1F2A; color:#fff;}
@@ -337,58 +307,60 @@
   }
 
   /* ---------- IN-APP TURN-BY-TURN ---------- */
-  /* Compact turn-by-turn floats over the map by default; the full step list
-     only opens when the user asks for it, keeping the route visible. */
+  /* A floating side panel over the live map — never a separate opaque
+     screen, so the rotating heading-up map is always visible underneath,
+     turn list on the left just like a real car nav display. */
   .tbt-overlay{
-    position:absolute; left:14px; right:14px; bottom:14px; z-index:20; color:#F8FAFC;
-    background:linear-gradient(145deg, rgba(18,24,38,.92), rgba(28,36,52,.82));
-    border:1px solid rgba(255,255,255,.14); backdrop-filter:blur(22px) saturate(150%);
-    box-shadow:0 20px 50px rgba(0,0,0,.34); display:flex; flex-direction:column;
-    border-radius:24px; overflow:hidden; transform:translateY(calc(100% + 24px));
-    transition:transform .38s cubic-bezier(.2,.8,.3,1), left .28s ease, right .28s ease, top .28s ease, bottom .28s ease;
-    max-height:calc(100% - 112px);
+    position:absolute; left:10px; top:10px; width:200px; z-index:20; color:#1B1F2A;
+    background:rgba(255,253,249,.95); backdrop-filter:blur(18px) saturate(160%);
+    box-shadow:0 16px 40px rgba(0,0,0,.22); border-radius:22px; border:1px solid rgba(255,255,255,.6);
+    display:flex; flex-direction:column; max-height:calc(100% - 20px); overflow:hidden;
+    transform:translateX(-130%); transition:transform .38s cubic-bezier(.2,.8,.3,1);
   }
-  .tbt-overlay.show{transform:translateY(0);}
-  .tbt-overlay.expanded{top:78px; left:12px; right:auto; bottom:12px; width:236px; max-height:none;}
-  .tbt-header{display:flex; align-items:center; gap:8px; padding:12px 12px 4px; flex:0 0 auto;}
-  .tbt-close, .tbt-toggle{
-    width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.1); color:#fff;
+  .tbt-overlay.show{transform:translateX(0);}
+  .tbt-header{display:flex; align-items:center; gap:8px; padding:12px 12px 8px; flex:0 0 auto;}
+  .tbt-close{
+    width:28px; height:28px; border-radius:50%; border:0; background:#F0ECE4; color:#1B1F2A;
     display:flex; align-items:center; justify-content:center; flex:0 0 auto;
   }
-  .tbt-close svg, .tbt-toggle svg{width:15px; height:15px;}
-  .tbt-toggle{width:auto; border-radius:999px; padding:0 12px; gap:6px; font-size:11.5px; font-weight:800; letter-spacing:.01em;}
+  .tbt-close svg{width:13px; height:13px;}
   .tbt-mute-inline{margin-left:auto;}
-  .tbt-current{display:flex; align-items:center; gap:12px; padding:8px 14px 14px; flex:0 0 auto;}
+  .tbt-current{display:flex; align-items:center; gap:10px; padding:2px 14px 12px; flex:0 0 auto;}
   .tbt-next-icon{
-    width:46px; height:46px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
-    background:#B7F36B; color:#16210D; border-radius:16px; box-shadow:0 10px 24px rgba(183,243,107,.24);
+    width:36px; height:36px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(150deg,#3B82F6,#5B9BFF); color:#fff; border-radius:12px;
+    box-shadow:0 6px 16px rgba(59,130,246,.35);
   }
-  .tbt-next-icon svg{width:24px; height:24px;}
-  .tbt-next-dist{font-family:var(--font-display); font-size:28px; font-weight:600; line-height:1; color:#fff;}
-  .tbt-next-instr{font-size:13px; color:rgba(248,250,252,.76); margin-top:4px; line-height:1.28; font-weight:700;}
-  .tbt-steps{display:none; flex:1; overflow-y:auto; padding:2px 10px 8px; border-top:1px solid rgba(255,255,255,.11);}
-  .tbt-overlay.expanded .tbt-steps{display:block;}
-  .tbt-step{display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,.09);}
-  .tbt-step.active{background:rgba(183,243,107,.1); border-radius:12px;}
+  .tbt-next-icon svg{width:19px; height:19px;}
+  .tbt-next-dist{font-family:var(--font-display); font-size:20px; font-weight:600; line-height:1.1;}
+  .tbt-next-instr{font-size:11.5px; color:#7a7266; margin-top:2px; line-height:1.25;}
+  .tbt-toggle{
+    display:flex; align-items:center; justify-content:space-between; width:100%; border:0; background:none;
+    padding:9px 14px; font-size:11px; font-weight:700; letter-spacing:.02em; color:#3B82F6;
+    border-top:1px solid rgba(27,31,42,.08); flex:0 0 auto;
+  }
+  .tbt-toggle svg{width:12px; height:12px; transition:transform .25s ease;}
+  .tbt-toggle.open svg{transform:rotate(180deg);}
+  .tbt-steps{max-height:0; overflow:hidden; padding:0 10px; transition:max-height .32s ease;}
+  .tbt-overlay.expanded .tbt-steps{max-height:280px; overflow-y:auto; padding:4px 10px;}
+  .tbt-step{display:flex; align-items:center; gap:9px; padding:9px 4px; border-bottom:1px solid rgba(27,31,42,.06);}
+  .tbt-step:last-child{border-bottom:0;}
   .tbt-step-icon{
-    width:28px; height:28px; border-radius:10px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#B7F36B;
-    background:rgba(255,255,255,.08);
+    width:24px; height:24px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#8a8375;
   }
-  .tbt-step-icon svg{width:16px; height:16px;}
-  .tbt-step-instr{font-size:12px; font-weight:700; line-height:1.25; color:#F8FAFC;}
-  .tbt-step-dist{font-size:10.5px; color:rgba(248,250,252,.55); margin-top:2px; font-weight:700;}
-  .tbt-panel-bottom{flex:0 0 auto; padding:12px 14px 14px; border-top:1px solid rgba(255,255,255,.11); background:rgba(7,10,16,.18);}
-  .tbt-summary{font-size:16px; font-weight:800; color:#fff; line-height:1.3;}
-  .tbt-summary small{display:block; font-size:11px; font-weight:700; color:rgba(248,250,252,.58); margin-top:1px;}
-  .tbt-dash{display:none; align-items:baseline; gap:6px; font-size:11.5px; color:rgba(248,250,252,.68); font-weight:700; margin-top:6px;}
-  .tbt-dash b{font-family:var(--font-display); font-size:16px; color:#B7F36B; font-weight:600;}
+  .tbt-step-icon svg{width:15px; height:15px;}
+  .tbt-step-instr{font-size:11.5px; font-weight:600; line-height:1.25;}
+  .tbt-step-dist{font-size:10.5px; color:#a19a8c; margin-top:1px;}
+  .tbt-panel-bottom{flex:0 0 auto; padding:12px 14px 14px; border-top:1px solid rgba(27,31,42,.08);}
+  .tbt-summary{font-size:16px; font-weight:700; color:#1B1F2A; line-height:1.3; font-family:var(--font-display);}
+  .tbt-summary small{display:block; font-size:11px; font-weight:600; color:#8a8375; margin-top:1px; font-family:var(--font-body);}
+  .tbt-dash{display:none; align-items:baseline; gap:6px; font-size:11.5px; color:#7a7266; font-weight:600; margin-top:6px;}
+  .tbt-dash b{font-family:var(--font-display); font-size:16px; color:#1B1F2A; font-weight:600;}
   .tbt-start-btn{
-    margin-top:10px; width:100%; padding:12px; border-radius:16px; border:0; background:#B7F36B; color:#16210D;
-    font-weight:800; font-size:13.5px; box-shadow:0 12px 26px rgba(183,243,107,.2);
+    margin-top:10px; width:100%; padding:12px; border-radius:14px; border:0; background:#1B1F2A; color:#fff;
+    font-weight:700; font-size:13.5px; box-shadow:0 8px 20px rgba(27,31,42,.25);
   }
-  .tbt-start-btn.active{background:#FF6B6B; color:#fff; box-shadow:none;}
-  .tbt-overlay:not(.expanded) .tbt-panel-bottom{display:grid; grid-template-columns:1fr 1.15fr; gap:10px; align-items:end;}
-  .tbt-overlay:not(.expanded) .tbt-start-btn{margin-top:0;}
+  .tbt-start-btn.active{background:#C24A2D;}
   .settings-label{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8b93a1; margin:22px 2px 8px;}
   .settings-note{font-size:12.5px; color:#9aa3b0; margin-top:28px; line-height:1.5;}
   .settings-overlay{
@@ -512,11 +484,7 @@
 
     <!-- NAVIGATE -->
     <section class="view" id="view-nav">
-      <div class="map-viewport">
-        <div class="map-rotor" id="mapRotor">
-          <div id="map"></div>
-        </div>
-      </div>
+      <div id="map"></div>
       <button class="nav-back" id="navBack" aria-label="Back to home">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
@@ -555,14 +523,6 @@
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
-      <div class="map-tools" aria-label="Map tools">
-        <button class="map-tool-btn" id="fitRouteBtn" aria-label="Fit route on map">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M7 12h10"/></svg>
-        </button>
-        <button class="map-tool-btn" id="mapStyleBtn" aria-label="Change map style">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
-        </button>
-      </div>
       <div class="nav-status" id="navStatus"></div>
       <div class="nav-sheet" id="navSheet">
         <div class="sheet-handle"></div>
@@ -571,12 +531,6 @@
           <span><b id="sheetDist">—</b> mi</span>
           <span><b id="sheetTime">—</b> <span id="sheetTimeLabel">min drive</span></span>
         </div>
-        <div class="route-insight" id="routeInsight">
-          <div class="insight-pill"><span>Leave</span><b id="insightLeave">Now</b></div>
-          <div class="insight-pill"><span>Turns</span><b id="insightTurns">—</b></div>
-          <div class="insight-pill"><span>Arrive</span><b id="insightArrive">—</b></div>
-        </div>
-        <div class="route-progress" id="routeProgress"><i id="routeProgressFill"></i></div>
         <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
           <button class="ghost" id="clearRoute">Clear</button>
@@ -586,8 +540,9 @@
 
       <div class="tbt-overlay" id="tbtOverlay">
         <div class="tbt-header">
-          <button class="tbt-close" id="tbtClose" aria-label="Close turn-by-turn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-          <button class="tbt-toggle" id="tbtToggle" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg><span id="tbtToggleLabel">Directions</span></button>
+          <button class="tbt-close" id="tbtClose" aria-label="Close turn-by-turn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
           <button class="tbt-close tbt-mute-inline" id="tbtMute" aria-label="Mute voice guidance">
             <svg id="tbtMuteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14"/></svg>
           </button>
@@ -599,6 +554,10 @@
             <div class="tbt-next-instr" id="tbtNextInstr">—</div>
           </span>
         </div>
+        <button type="button" class="tbt-toggle" id="tbtToggleList">
+          <span id="tbtToggleLabel">All directions</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
         <div class="tbt-steps" id="tbtSteps"></div>
         <div class="tbt-panel-bottom">
           <div class="tbt-summary"><span id="tbtDist">—</span><small><span id="tbtTime">—</span></small></div>
@@ -1394,23 +1353,10 @@
   }
 
   /* ---------------- NAVIGATE ---------------- */
-  let map, baseTileLayer, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
+  let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
   let poiLayer = [];
   let originSelected = null, destSelected = null;
   const DEFAULT_CENTER = [41.1865, -73.1952]; // Bridgeport, CT fallback
-  let mapTheme = 'standard';
-  const MAP_THEMES = {
-    standard: {
-      url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution:'© OpenStreetMap contributors',
-      label:'Standard'
-    },
-    topo: {
-      url:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      attribution:'Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap',
-      label:'Topo'
-    }
-  };
 
   // The main OSRM demo server only routes cars; walking/cycling use OSRM's
   // German community demo instances, which host the foot/bike profiles.
@@ -1556,7 +1502,9 @@
 
   function initMap(){
     map = L.map('map', {zoomControl:false, attributionControl:true}).setView(DEFAULT_CENTER, 12);
-    setMapTheme(mapTheme);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'© OpenStreetMap contributors'
+    }).addTo(map);
     L.control.zoom({position:'bottomright'}).addTo(map);
     locateUser({silentFail:true});
 
@@ -1603,10 +1551,6 @@
   }
 
   document.getElementById('locateBtn').addEventListener('click', ()=> locateUser());
-  document.getElementById('fitRouteBtn').addEventListener('click', focusRoute);
-  document.getElementById('mapStyleBtn').addEventListener('click', ()=>{
-    setMapTheme(mapTheme === 'standard' ? 'topo' : 'standard');
-  });
 
   function haversineMiles(lat1, lon1, lat2, lon2){
     const R = 3958.8, toRad = d=>d*Math.PI/180;
@@ -1640,49 +1584,6 @@
     routeLines = [];
   }
 
-  function setMapTheme(theme){
-    mapTheme = theme;
-    if(!map) return;
-    if(baseTileLayer) map.removeLayer(baseTileLayer);
-    const cfg = MAP_THEMES[mapTheme];
-    baseTileLayer = L.tileLayer(cfg.url, {
-      maxZoom:19,
-      attribution:cfg.attribution
-    }).addTo(map);
-    const btn = document.getElementById('mapStyleBtn');
-    if(btn) btn.setAttribute('aria-label', `Map style: ${cfg.label}`);
-    routeLines.forEach(l=> l.bringToFront());
-  }
-
-  function focusRoute(){
-    const line = routeLines[selectedRouteIdx] || routeLines[0];
-    if(!line || !map) return;
-    map.fitBounds(line.getBounds(), {padding:[72,56]});
-  }
-
-  function countManeuvers(route){
-    if(!route || !route.legs) return 0;
-    return route.legs.reduce((total, leg)=> total + (leg.steps || []).filter(s=> s.maneuver && !['depart','arrive'].includes(s.maneuver.type)).length, 0);
-  }
-
-  function updateRouteInsight(route){
-    const insight = document.getElementById('routeInsight');
-    const progress = document.getElementById('routeProgress');
-    if(!route){
-      insight.classList.remove('show');
-      progress.classList.remove('show');
-      return;
-    }
-    const turns = countManeuvers(route);
-    const eta = new Date(Date.now() + (route.duration || 0) * 1000);
-    document.getElementById('insightLeave').textContent = 'Now';
-    document.getElementById('insightTurns').textContent = turns ? `${turns} turns` : 'Easy';
-    document.getElementById('insightArrive').textContent = eta.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
-    document.getElementById('routeProgressFill').style.width = Math.max(18, Math.min(82, 100 - Math.round((route.duration || 1) / 90))) + '%';
-    insight.classList.add('show');
-    progress.classList.add('show');
-  }
-
   // Draws every candidate route, highlighting whichever is selected; taps
   // on a non-selected line (or its chip) switch which one is highlighted.
   function renderRoutes(){
@@ -1709,7 +1610,6 @@
     const r = routesData[i];
     document.getElementById('sheetDist').textContent = (r.distance/1609.34).toFixed(1);
     document.getElementById('sheetTime').textContent = Math.round(r.duration/60);
-    updateRouteInsight(r);
     renderRouteChips();
   }
 
@@ -1777,7 +1677,6 @@
       map.fitBounds(bounds, {padding:[60,60]});
       document.getElementById('sheetDist').textContent = (routesData[0].distance/1609.34).toFixed(1);
       document.getElementById('sheetTime').textContent = Math.round(routesData[0].duration/60);
-      updateRouteInsight(routesData[0]);
       showNavBanner('');
       loadNearbyPOIs(bounds); // fire-and-forget — purely decorative, never blocks the route
     } else {
@@ -1792,7 +1691,6 @@
       document.getElementById('sheetDist').textContent = miles.toFixed(1) + ' (direct)';
       document.getElementById('sheetTime').textContent = '—';
       document.getElementById('routeOptions').innerHTML = '';
-      updateRouteInsight(null);
       showNavBanner('Live driving directions aren\'t reachable from this preview, so this shows a direct line and straight-line distance instead.');
     }
 
@@ -1803,7 +1701,7 @@
   document.getElementById('goBtn').addEventListener('click', routeTo);
 
   /* ---------------- IN-APP TURN-BY-TURN ---------------- */
-  let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null, tbtExpanded = false;
+  let tbtSteps = [], tbtCurrentIdx = 0, tbtWatchId = null;
   let voiceOn = true, lastNavPos = null, lastHeading = 0;
 
   function speak(text){
@@ -1855,6 +1753,8 @@
     return `${verb}${name}`;
   }
   function renderTbtSteps(){
+    // The current/next maneuver is already shown prominently above this
+    // list, so the scrollable list here covers what comes after it.
     document.getElementById('tbtSteps').innerHTML = tbtSteps.map((s,i)=>{
         if(i <= tbtCurrentIdx) return '';
         return `<div class="tbt-step" data-i="${i}">
@@ -1862,15 +1762,6 @@
           <div><div class="tbt-step-instr">${escapeHtml(describeStep(s))}</div><div class="tbt-step-dist">${formatDist(s.distance)}</div></div>
         </div>`;
       }).join('');
-  }
-  function setTbtExpanded(expanded){
-    tbtExpanded = expanded;
-    const overlay = document.getElementById('tbtOverlay');
-    const toggle = document.getElementById('tbtToggle');
-    const label = document.getElementById('tbtToggleLabel');
-    overlay.classList.toggle('expanded', expanded);
-    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    label.textContent = expanded ? 'One step' : 'Directions';
   }
   function updateTbtNext(){
     const s = tbtSteps[tbtCurrentIdx];
@@ -1912,9 +1803,18 @@
     renderTbtSteps();
     updateTbtNext();
     setMuteIcon();
-    setTbtExpanded(false);
+    // Default to one-turn-at-a-time — a full list crowds out the map.
+    document.getElementById('tbtOverlay').classList.remove('expanded');
+    document.getElementById('tbtToggleList').classList.remove('open');
+    document.getElementById('tbtToggleLabel').textContent = 'All directions';
     document.getElementById('tbtOverlay').classList.add('show');
+    document.getElementById('navSheet').classList.remove('show'); // avoid the two panels overlapping
   }
+  document.getElementById('tbtToggleList').addEventListener('click', function(){
+    const expanded = document.getElementById('tbtOverlay').classList.toggle('expanded');
+    this.classList.toggle('open', expanded);
+    document.getElementById('tbtToggleLabel').textContent = expanded ? 'One at a time' : 'All directions';
+  });
   function stopTbtNav(){
     if(tbtWatchId != null){ navigator.geolocation.clearWatch(tbtWatchId); tbtWatchId = null; }
     const btn = document.getElementById('tbtStartBtn');
@@ -1925,15 +1825,13 @@
     document.getElementById('tbtOverlay').classList.remove('live');
     document.getElementById('view-nav').classList.remove('nav-live');
     document.getElementById('tbtDash').style.display = 'none';
-    document.getElementById('mapRotor').style.transform = 'rotate(0deg)';
-    if(map) map.dragging.enable();
     // Back to the plain location dot once navigation stops.
     if(userMarker){ const ll = userMarker.getLatLng(); map.removeLayer(userMarker); userMarker = L.marker(ll, {icon:pulseDivIcon('#3B82F6')}).addTo(map); }
   }
   function closeTbt(){
     document.getElementById('tbtOverlay').classList.remove('show');
-    setTbtExpanded(false);
     stopTbtNav();
+    if(routesData.length) document.getElementById('navSheet').classList.add('show');
   }
   function startTbtNav(){
     if(!navigator.geolocation){ showNavBanner("Geolocation isn't supported here."); return; }
@@ -1945,7 +1843,6 @@
     document.getElementById('view-nav').classList.add('nav-live');
     document.getElementById('tbtDash').style.display = 'flex';
     updateTbtEta();
-    if(map) map.dragging.disable(); // heading-up rotation would fight manual dragging
     map.setZoom(Math.max(map.getZoom(), 16));
     speak(`Starting navigation. ${describeStep(tbtSteps[0])}.`);
     tbtWatchId = navigator.geolocation.watchPosition(
@@ -1972,10 +1869,11 @@
           userMarker = L.marker([lat, lon], {icon:navPuckIcon(heading)}).addTo(map);
         }
         map.panTo([lat, lon], {animate:true, duration:0.4});
-        // Rotate the whole map so "up" always matches the direction of
-        // travel — the puck's own counter-rotation cancels out, so it stays
-        // pointing straight up on screen, Tesla/Google-nav style.
-        document.getElementById('mapRotor').style.transform = `rotate(${-heading}deg)`;
+        // Note: the map itself stays north-up. Rotating the whole tile layer
+        // via CSS looked "advanced" but fought Leaflet's own tile rendering
+        // and produced black/blank gaps mid-turn, so only the small puck
+        // arrow (already rotated above) indicates heading now — reliable
+        // beats flashy here.
 
         // Live speed readout, like a dashboard.
         const mph = (pos.coords.speed != null && !isNaN(pos.coords.speed)) ? Math.round(pos.coords.speed * 2.23694) : null;
@@ -2007,7 +1905,6 @@
   }
   document.getElementById('startTbt').addEventListener('click', openTurnByTurn);
   document.getElementById('tbtClose').addEventListener('click', closeTbt);
-  document.getElementById('tbtToggle').addEventListener('click', ()=> setTbtExpanded(!tbtExpanded));
   document.getElementById('tbtStartBtn').addEventListener('click', ()=>{
     if(tbtWatchId != null) stopTbtNav(); else startTbtNav();
   });
@@ -2019,7 +1916,6 @@
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
     document.getElementById('routeOptions').innerHTML = '';
-    updateRouteInsight(null);
     document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
     closeTbt();
