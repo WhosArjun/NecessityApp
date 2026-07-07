@@ -187,6 +187,14 @@
 
   .arc-card{padding:18px 20px 14px; display:flex; flex-direction:column; align-items:center;}
   .arc-times{display:flex; justify-content:space-between; width:100%; font-size:12.5px; color:var(--text-dim); margin-top:2px;}
+  .light-card{padding:6px 18px;}
+  .light-row{display:flex; align-items:center; gap:9px; padding:9px 0; font-size:13px; color:var(--text); border-bottom:1px solid rgba(120,120,140,.14);}
+  .light-row:last-child{border-bottom:0;}
+  .light-row b{margin-left:auto; font-weight:700; font-size:12.5px; color:var(--text-dim);}
+  .light-dot{width:8px; height:8px; border-radius:50%; flex:0 0 auto;}
+  .moon-card{display:flex; align-items:center; gap:14px; padding:16px 18px;}
+  .moon-name{font-family:var(--font-display); font-size:17px; font-weight:500;}
+  .moon-illum{font-size:12.5px; color:var(--text-dim); margin-top:2px;}
   .arc-times b{color:var(--text); font-weight:700;}
 
   .detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;}
@@ -300,6 +308,13 @@
   .sheet-actions button{flex:1; padding:12px; border-radius:14px; border:0; font-weight:700; font-size:14px;}
   .sheet-actions .primary{background:#1B1F2A; color:#fff;}
   .sheet-actions .ghost{background:#F0F1F4; color:#1B1F2A;}
+  .sheet-actions .icon-only{flex:0 0 auto; width:46px; display:flex; align-items:center; justify-content:center; padding:0;}
+  .sheet-actions .icon-only svg{width:17px; height:17px;}
+  .dest-weather-chip{
+    display:none; align-items:center; gap:8px; margin:6px 0 2px; padding:8px 12px; border-radius:12px;
+    background:#F5F6F8; font-size:12.5px; font-weight:600; color:#4B5568; width:fit-content;
+  }
+  .dest-weather-chip svg{width:16px; height:16px; color:#3B82F6;}
   .nav-status{
     position:absolute; left:16px; bottom:20px; z-index:6; background:rgba(255,255,255,.92);
     padding:8px 14px; border-radius:999px; font-size:12.5px; color:#1B1F2A; box-shadow:0 6px 18px rgba(0,0,0,.15);
@@ -531,9 +546,16 @@
           <span><b id="sheetDist">—</b> mi</span>
           <span><b id="sheetTime">—</b> <span id="sheetTimeLabel">min drive</span></span>
         </div>
+        <div class="dest-weather-chip" id="destWeatherChip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+          <span id="destWeatherText">—</span>
+        </div>
         <div class="route-options" id="routeOptions"></div>
         <div class="sheet-actions">
           <button class="ghost" id="clearRoute">Clear</button>
+          <button class="ghost icon-only" id="shareTrip" aria-label="Share trip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.2M8.3 13.3l7.4 4.2"/></svg>
+          </button>
           <button class="primary" id="startTbt">Turn-by-turn</button>
         </div>
       </div>
@@ -1154,6 +1176,41 @@
     return {label:'Hazardous', note:'Serious health risk.'};
   }
 
+  // Pure astronomical math — no network calls, so this can never break the
+  // weather load the way a fetch can. Phase 0 = new moon, 0.5 = full moon.
+  function moonPhase(date){
+    const synodicMonth = 29.530588853; // days
+    const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14, 0) / 1000; // a reference new moon
+    const days = (date.getTime()/1000 - knownNewMoon) / 86400;
+    let phase = (days % synodicMonth) / synodicMonth;
+    if(phase < 0) phase += 1;
+    return phase;
+  }
+  function moonPhaseInfo(phase){
+    const names = ['New Moon','Waxing Crescent','First Quarter','Waxing Gibbous','Full Moon','Waning Gibbous','Last Quarter','Waning Crescent'];
+    const idx = Math.round(phase*8) % 8;
+    const illumination = Math.round((1 - Math.cos(phase*2*Math.PI))/2 * 100);
+    return {name:names[idx], illumination};
+  }
+  function moonIconHtml(phase){
+    const R = 20;
+    const mag = R * (1 - Math.cos(phase*2*Math.PI));
+    const offset = (phase < 0.5 ? -1 : 1) * mag;
+    return `<div style="width:40px;height:40px;border-radius:50%;background:#E8DCB8;position:relative;overflow:hidden;box-shadow:inset 0 0 6px rgba(0,0,0,.15);">
+        <div style="position:absolute;top:0;left:${offset}px;width:40px;height:40px;border-radius:50%;background:#1B1F2A;opacity:.88;"></div>
+      </div>`;
+  }
+  function goldenBlueHours(sunrise, sunset){
+    const mins = (d, m)=> new Date(d.getTime() + m*60000);
+    const fmt = d=> d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    return {
+      blueMorning: `${fmt(mins(sunrise,-30))} – ${fmt(sunrise)}`,
+      goldenMorning: `${fmt(sunrise)} – ${fmt(mins(sunrise,60))}`,
+      goldenEvening: `${fmt(mins(sunset,-60))} – ${fmt(sunset)}`,
+      blueEvening: `${fmt(sunset)} – ${fmt(mins(sunset,30))}`
+    };
+  }
+
   // Every network call in this app gets a hard timeout. Without one, a
   // request that never resolves OR rejects (silently blocked by a proxy,
   // stalled DNS, etc.) would make Promise.all wait forever — freezing the
@@ -1234,6 +1291,9 @@
     const now = new Date(cur.time);
     const sunrise = new Date(daily.sunrise[0]);
     const sunset = new Date(daily.sunset[0]);
+    const hours = goldenBlueHours(sunrise, sunset);
+    const mPhase = moonPhase(now);
+    const moonInfo = moonPhaseInfo(mPhase);
     let dawnDusk = null;
     if(Math.abs(now - sunrise) < 55*60000) dawnDusk = 'dawn';
     if(Math.abs(now - sunset) < 55*60000) dawnDusk = 'dusk';
@@ -1326,6 +1386,23 @@
         <div class="arc-times">
           <span>Sunrise<br><b>${sunrise.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</b></span>
           <span style="text-align:right;">Sunset<br><b>${sunset.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</b></span>
+        </div>
+      </div>
+
+      <p class="section-label">Light</p>
+      <div class="glass-card light-card">
+        <div class="light-row"><span class="light-dot" style="background:#FFB199;"></span>Golden hour<b>${hours.goldenMorning}</b></div>
+        <div class="light-row"><span class="light-dot" style="background:#8FA6C9;"></span>Blue hour<b>${hours.blueMorning}</b></div>
+        <div class="light-row"><span class="light-dot" style="background:#8FA6C9;"></span>Blue hour<b>${hours.blueEvening}</b></div>
+        <div class="light-row"><span class="light-dot" style="background:#FFB199;"></span>Golden hour<b>${hours.goldenEvening}</b></div>
+      </div>
+
+      <p class="section-label">Moon</p>
+      <div class="glass-card moon-card">
+        ${moonIconHtml(mPhase)}
+        <div>
+          <div class="moon-name">${moonInfo.name}</div>
+          <div class="moon-illum">${moonInfo.illumination}% illuminated</div>
         </div>
       </div>
 
@@ -1459,6 +1536,24 @@
         poiLayer.push(marker);
       });
     }catch(e){ /* decorative only — fail silently */ }
+  }
+  // A quick current-conditions glance at where you're headed — one of the
+  // niceties of living in the same app as the weather screen. Reuses the
+  // same timeout-protected fetch pattern as everything else, so a failure
+  // here just hides the chip rather than affecting the route in any way.
+  async function loadDestinationWeather(dest){
+    const chip = document.getElementById('destWeatherChip');
+    chip.style.display = 'none';
+    try{
+      const r = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${dest.lat}&longitude=${dest.lon}&current=temperature_2m,weather_code,is_day&temperature_unit=${weatherState.unit==='f'?'fahrenheit':'celsius'}`, null, 8000);
+      if(!r.ok) return;
+      const j = await r.json();
+      const c = j.current;
+      if(!c) return;
+      document.getElementById('destWeatherText').textContent =
+        `${weatherLabel(c.weather_code)}, ${Math.round(c.temperature_2m)}° at destination`;
+      chip.style.display = 'flex';
+    }catch(e){ /* nice-to-have only — fail silently */ }
   }
   // A Google-Maps-style "puck": a soft heading cone plus a chevron that
   // rotates to point the direction of travel. The rotor is a separate inner
@@ -1679,6 +1774,7 @@
       document.getElementById('sheetTime').textContent = Math.round(routesData[0].duration/60);
       showNavBanner('');
       loadNearbyPOIs(bounds); // fire-and-forget — purely decorative, never blocks the route
+      loadDestinationWeather(dest); // same — a nice-to-have glance, never blocks the route
     } else {
       // Live routing unavailable — fall back to a direct line so the
       // feature still gives useful distance/direction information.
@@ -1916,10 +2012,27 @@
     if(destMarker){ map.removeLayer(destMarker); destMarker=null; }
     document.getElementById('navSheet').classList.remove('show');
     document.getElementById('routeOptions').innerHTML = '';
+    document.getElementById('destWeatherChip').style.display = 'none';
     document.getElementById('destInput').value=''; destSelected = null;
     showNavBanner('');
     closeTbt();
     renderRecentChips();
+  });
+
+  document.getElementById('shareTrip').addEventListener('click', async ()=>{
+    const dest = document.getElementById('sheetTitle').textContent;
+    const dist = document.getElementById('sheetDist').textContent;
+    const time = document.getElementById('sheetTime').textContent;
+    const text = `Heading to ${dest} — ${dist} mi, about ${time} min away.`;
+    if(navigator.share){
+      try{ await navigator.share({text}); }catch(e){ /* person cancelled the share sheet — nothing to do */ }
+    } else if(navigator.clipboard){
+      try{
+        await navigator.clipboard.writeText(text);
+        showNavBanner('Trip details copied to clipboard.');
+        setTimeout(()=> showNavBanner(''), 2500);
+      }catch(e){ showNavBanner("Couldn't copy trip details."); }
+    }
   });
 
 })();
