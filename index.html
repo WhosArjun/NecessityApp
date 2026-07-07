@@ -2031,7 +2031,9 @@
         await navigator.clipboard.writeText(text);
         showNavBanner('Trip details copied to clipboard.');
         setTimeout(()=> showNavBanner(''), 2500);
-      }catch(e){ showNavBanner("Couldn't copy trip details."); }
+      }
+      catch(e){ showNavBanner("Couldn't copy trip details."); 
+      }
     }
   });
 
