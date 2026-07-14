@@ -251,13 +251,27 @@
   .moon-card{display:flex; align-items:center; gap:14px; padding:16px 18px;}
   .moon-name{font-family:var(--font-display); font-size:17px; font-weight:500;}
   .moon-illum{font-size:12.5px; color:var(--text-dim); margin-top:2px;}
-  .sky-dial-wrap{display:flex; justify-content:center; margin:18px 0 8px;}
-  .world-row{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid rgba(120,120,140,.14);}
+  .subhead-title{font-family:var(--font-display); font-size:19px; font-weight:600; color:var(--text);}
+  .subhead-spacer{width:40px; height:40px; flex:0 0 auto;}
+  .sky-search{margin:8px 0 2px;}
+  .sky-search-row{max-width:none;}
+  .sky-search-row .sky-search-ico{position:absolute; left:15px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-dim); pointer-events:none;}
+  .sky-search-row input{padding-left:40px;}
+  .globe-wrap{position:relative; display:flex; justify-content:center; align-items:center; margin:16px 0 4px; min-height:200px; touch-action:none;}
+  #globeCanvas{display:block; cursor:grab; touch-action:none; border-radius:50%;}
+  #globeCanvas:active{cursor:grabbing;}
+  .globe-loading{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; font-size:13px; color:var(--text-dim); padding:0 24px;}
+  .sky-selected{padding:16px 18px 18px; text-align:center; margin-top:8px;}
+  .sky-sel-name{font-size:14px; font-weight:600; color:var(--text);}
+  .sky-sel-time{font-family:var(--font-display); font-size:40px; font-weight:500; line-height:1.05; margin:6px 0 3px; color:var(--text);}
+  .sky-sel-sub{font-size:12.5px; color:var(--text-dim);}
+  .world-row{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid rgba(120,120,140,.14); width:100%; background:none; border-left:0; border-right:0; border-top:0; text-align:left; cursor:pointer; color:inherit;}
   .world-row:last-child{border-bottom:0;}
+  .world-row:hover, .world-row:focus-visible{background:var(--glass);}
   .world-row-icon{width:26px; height:26px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:var(--text-dim);}
   .world-row-icon svg{width:20px; height:20px;}
-  .world-row-city{font-size:14px; font-weight:600; flex:1;}
-  .world-row-sub{font-size:11.5px; color:var(--text-dim); margin-top:1px;}
+  .world-row-city{font-size:14px; font-weight:600; display:block; color:var(--text);}
+  .world-row-sub{font-size:11.5px; color:var(--text-dim); margin-top:1px; display:block;}
   .world-row-time{font-family:var(--font-display); font-size:17px; font-weight:500;}
   .arc-times b{color:var(--text); font-weight:700;}
 
@@ -797,14 +811,25 @@
         <button class="icon-btn" id="skyBack" aria-label="Back to home">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
+        <span class="subhead-title">World Sky</span>
+        <span class="subhead-spacer" aria-hidden="true"></span>
       </div>
       <div class="scroll" id="skyScroll">
-        <p class="loc-name" id="skyLocalTime">—</p>
-        <p class="loc-date" id="skyLocalDate">—</p>
-        <div class="sky-dial-wrap" id="skyDialWrap"></div>
-        <p class="section-label">Around the World</p>
+        <div class="nav-field sky-search">
+          <div class="search-row sky-search-row">
+            <svg class="sky-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input id="skySearch" type="text" placeholder="Search a place to see its time…" autocomplete="off" aria-label="Search a place to see its local time">
+          </div>
+          <div class="suggest-list" id="skySuggest"></div>
+        </div>
+        <div class="globe-wrap" id="globeWrap">
+          <canvas id="globeCanvas" role="img" aria-label="Interactive globe — drag to spin, tap anywhere for local time"></canvas>
+          <div class="globe-loading" id="globeLoading">Loading globe…</div>
+        </div>
+        <div class="glass-card sky-selected" id="skySelected" style="display:none;"></div>
+        <p class="section-label">Around the world</p>
         <div class="glass-card" id="worldClockList"></div>
-        <p class="credit">Local sunrise/sunset from your loaded forecast, where available</p>
+        <p class="credit">Drag to spin the globe · tap anywhere on Earth for its local time</p>
       </div>
     </section>
 
@@ -1017,6 +1042,36 @@
     return leafletPromise;
   }
 
+  /* ---------------- LAZY GLOBE LIBS ---------------- */
+  // D3 (geo projection) + topojson + the world-atlas land mesh are only needed
+  // by the World Sky globe, so like Leaflet they're fetched on demand the first
+  // time that view opens. Resolves once d3, topojson and the land geometry are ready.
+  let globePromise = null, worldLand = null;
+  function loadScriptOnce(src){
+    return new Promise((res, rej)=>{
+      const s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = ()=> res();
+      s.onerror = ()=> rej(new Error('script-load-failed:' + src));
+      document.body.appendChild(s);
+    });
+  }
+  function loadGlobeLibs(){
+    if(window.d3 && window.topojson && worldLand) return Promise.resolve();
+    if(globePromise) return globePromise;
+    globePromise = (async ()=>{
+      if(!window.d3) await loadScriptOnce('https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js');
+      if(!window.topojson) await loadScriptOnce('https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js');
+      if(!worldLand){
+        const r = await fetchWithTimeout('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json', null, 12000);
+        if(!r.ok) throw new Error('atlas-load-failed');
+        const topo = await r.json();
+        worldLand = window.topojson.feature(topo, topo.objects.land);
+      }
+    })();
+    return globePromise;
+  }
+
   /* ---------------- VIEW ROUTING ---------------- */
   const views = {home:'view-home', weather:'view-weather', nav:'view-nav', sky:'view-sky'};
   let mapInited = false, skyInterval = null;
@@ -1034,11 +1089,25 @@
       });
     }
     if(name==='sky'){
+      loadGlobeLibs().then(()=>{
+        const loading = document.getElementById('globeLoading');
+        if(loading) loading.style.display = 'none';
+        if(!globe.inited) initGlobe(); else { sizeGlobe(); fitGlobe(); }
+        globeSpin(true);
+        if(!skySel && weatherState.loaded && weatherState.lat != null){
+          selectSkyPoint(weatherState.lon, weatherState.lat, weatherState.place);
+        }
+      }).catch(()=>{
+        const loading = document.getElementById('globeLoading');
+        if(loading) loading.textContent = 'Couldn\u2019t load the globe — check your connection and reopen World Sky.';
+      });
       updateSkyView();
       clearInterval(skyInterval);
       skyInterval = setInterval(updateSkyView, 30000);
     } else {
       clearInterval(skyInterval);
+      globeSpin(false);
+      stopSkyClock();
     }
     // Move focus to the newly shown view for screen-reader / keyboard users.
     const viewEl = document.getElementById(views[name]);
@@ -1655,43 +1724,19 @@
     };
   }
 
-  /* ---------------- WORLD SKY ---------------- */
-  // A full 24-hour dial: a night arc and a day arc drawn between sunrise and
-  // sunset hours, with a marker for right now. Pure SVG path math — no map
-  // library, no network call, so nothing here can ever break like the
-  // heading-rotation experiment did.
-  function hourToXY(hour, cx, cy, r){
-    const ang = (hour/24)*2*Math.PI - Math.PI/2;
-    return [cx + r*Math.cos(ang), cy + r*Math.sin(ang)];
-  }
-  function dialArcPath(h1, h2, cx, cy, r){
-    const [x1,y1] = hourToXY(h1, cx, cy, r);
-    const [x2,y2] = hourToXY(h2, cx, cy, r);
-    let diff = h2 - h1; if(diff < 0) diff += 24;
-    const largeArc = diff > 12 ? 1 : 0;
-    return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
-  }
-  function skyDialSvg(nowHour, sunriseHour, sunsetHour){
-    const cx=110, cy=110, r=86, sw=15;
-    const dayArc = dialArcPath(sunriseHour, sunsetHour, cx, cy, r);
-    const nightArc = dialArcPath(sunsetHour, sunriseHour, cx, cy, r);
-    const [sx, sy] = hourToXY(nowHour, cx, cy, r);
-    const labels = [0,6,12,18].map(h=>{
-      const [lx,ly] = hourToXY(h, cx, cy, r+22);
-      const label = h===0?'12am':h===12?'12pm':(h<12?h+'am':(h-12)+'pm');
-      return `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="currentColor" opacity=".55" font-weight="600">${label}</text>`;
-    }).join('');
-    return `<svg viewBox="0 0 220 220" width="220" height="220" style="color:var(--text);">
-        <path d="${nightArc}" fill="none" stroke="#2C3868" stroke-width="${sw}" stroke-linecap="round"/>
-        <path d="${dayArc}" fill="none" stroke="#FFCB8E" stroke-width="${sw}" stroke-linecap="round"/>
-        ${labels}
-        <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="10" fill="#fff" stroke="#1B1F2A" stroke-width="2.5"/>
-      </svg>`;
-  }
+  /* ---------------- WORLD SKY (INTERACTIVE GLOBE) ---------------- */
+  // An orthographic globe (D3 + a world-atlas land mesh) with a live day/night
+  // terminator. Drag to spin, tap anywhere on Earth for that point's local
+  // time, or search a place. The heavy libs are lazy-loaded (see loadGlobeLibs).
   const WORLD_CITIES = [
-    ['New York','America/New_York'], ['London','Europe/London'], ['Paris','Europe/Paris'],
-    ['Dubai','Asia/Dubai'], ['Mumbai','Asia/Kolkata'], ['Tokyo','Asia/Tokyo'],
-    ['Sydney','Australia/Sydney'], ['Los Angeles','America/Los_Angeles']
+    ['New York','America/New_York', 40.71, -74.01],
+    ['London','Europe/London', 51.51, -0.13],
+    ['Paris','Europe/Paris', 48.86, 2.35],
+    ['Dubai','Asia/Dubai', 25.20, 55.27],
+    ['Mumbai','Asia/Kolkata', 19.08, 72.88],
+    ['Tokyo','Asia/Tokyo', 35.68, 139.69],
+    ['Sydney','Australia/Sydney', -33.87, 151.21],
+    ['Los Angeles','America/Los_Angeles', 34.05, -118.24]
   ];
   function cityHour(tz){
     const parts = new Intl.DateTimeFormat('en-US', {timeZone:tz, hour:'numeric', hour12:false}).formatToParts(new Date());
@@ -1703,33 +1748,267 @@
     if((hour >= 5 && hour < 6) || (hour >= 18 && hour < 19.5)) return ICONS.partlyDay;
     return ICONS.clearNight;
   }
+  function prefersReducedMotion(){
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  const globe = { canvas:null, ctx:null, projection:null, path:null, graticule:null,
+                  size:300, dpr:1, marker:null, spinning:false, raf:null, lastT:0, inited:false };
+
+  function sizeGlobe(){
+    const wrap = document.getElementById('globeWrap');
+    const avail = wrap ? wrap.clientWidth : 300;
+    const size = Math.max(200, Math.min(avail || 300, 340));
+    globe.size = size;
+    globe.dpr = window.devicePixelRatio || 1;
+    globe.canvas.width = Math.round(size * globe.dpr);
+    globe.canvas.height = Math.round(size * globe.dpr);
+    globe.canvas.style.width = size + 'px';
+    globe.canvas.style.height = size + 'px';
+    globe.ctx.setTransform(globe.dpr, 0, 0, globe.dpr, 0, 0);
+  }
+  function fitGlobe(){
+    const s = globe.size;
+    globe.projection.translate([s/2, s/2]).scale(s/2 - 4);
+  }
+  function initGlobe(){
+    globe.canvas = document.getElementById('globeCanvas');
+    globe.ctx = globe.canvas.getContext('2d');
+    globe.projection = window.d3.geoOrthographic().rotate([0, -18, 0]).clipAngle(90);
+    globe.graticule = window.d3.geoGraticule10();
+    globe.path = window.d3.geoPath(globe.projection, globe.ctx);
+    sizeGlobe(); fitGlobe();
+    attachGlobeInteraction();
+    globe.inited = true;
+    drawGlobe();
+  }
+  // The sub-solar point (where the sun is directly overhead) drives the
+  // day/night terminator — the night hemisphere is a spherical cap opposite it.
+  function subsolarPoint(){
+    const now = new Date();
+    const utcH = now.getUTCHours() + now.getUTCMinutes()/60 + now.getUTCSeconds()/3600;
+    const lon = -15 * (utcH - 12);
+    const start = Date.UTC(now.getUTCFullYear(), 0, 0);
+    const dayOfYear = Math.floor((now - start) / 86400000);
+    const decl = -23.44 * Math.cos((2*Math.PI/365) * (dayOfYear + 10));
+    return [lon, decl];
+  }
+  function nightFeature(){
+    const [slon, slat] = subsolarPoint();
+    return window.d3.geoCircle().center([slon + 180, -slat]).radius(90)();
+  }
+  function pointVisible(pt){
+    const r = globe.projection.rotate();
+    return window.d3.geoDistance(pt, [-r[0], -r[1]]) < Math.PI/2;
+  }
+  function drawGlobe(){
+    if(!globe.inited) return;
+    const ctx = globe.ctx, s = globe.size, p = globe.path;
+    ctx.clearRect(0, 0, s, s);
+    // ocean sphere
+    ctx.beginPath(); p({type:'Sphere'});
+    const grad = ctx.createRadialGradient(s*0.36, s*0.34, s*0.08, s/2, s/2, s/2);
+    grad.addColorStop(0, '#3a5f96'); grad.addColorStop(1, '#0e1a33');
+    ctx.fillStyle = grad; ctx.fill();
+    // graticule
+    ctx.beginPath(); p(globe.graticule);
+    ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.lineWidth = 0.5; ctx.stroke();
+    // land
+    ctx.beginPath(); p(worldLand);
+    ctx.fillStyle = '#9bb87a'; ctx.fill();
+    ctx.strokeStyle = 'rgba(20,30,20,.25)'; ctx.lineWidth = 0.4; ctx.stroke();
+    // night shading
+    ctx.beginPath(); p(nightFeature());
+    ctx.fillStyle = 'rgba(6,10,26,.46)'; ctx.fill();
+    // marker
+    if(globe.marker && pointVisible(globe.marker)){
+      const xy = globe.projection(globe.marker);
+      if(xy){
+        ctx.beginPath(); ctx.arc(xy[0], xy[1], 5.5, 0, 2*Math.PI);
+        ctx.fillStyle = '#FFCB8E'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#1B1F2A'; ctx.stroke();
+      }
+    }
+    // rim
+    ctx.beginPath(); p({type:'Sphere'});
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  function globeSpin(on){
+    globe.spinning = on;
+    if(on) runGlobeLoop(); else stopGlobeLoop();
+  }
+  function runGlobeLoop(){
+    if(globe.raf || !globe.inited) return;
+    if(prefersReducedMotion()){ drawGlobe(); return; }
+    globe.lastT = performance.now();
+    const frame = (t)=>{
+      if(!globe.spinning || currentView !== 'sky' || document.hidden){ globe.raf = null; return; }
+      const dt = t - globe.lastT; globe.lastT = t;
+      const r = globe.projection.rotate();
+      globe.projection.rotate([r[0] + dt*0.005, r[1], r[2]]);
+      drawGlobe();
+      globe.raf = requestAnimationFrame(frame);
+    };
+    globe.raf = requestAnimationFrame(frame);
+  }
+  function stopGlobeLoop(){ if(globe.raf){ cancelAnimationFrame(globe.raf); globe.raf = null; } }
+  function flyGlobeTo(lon, lat){
+    globe.spinning = false; stopGlobeLoop();
+    const start = globe.projection.rotate();
+    let tlon = -lon;
+    while(tlon - start[0] > 180) tlon -= 360;
+    while(tlon - start[0] < -180) tlon += 360;
+    const target = [tlon, -lat, 0];
+    if(prefersReducedMotion()){ globe.projection.rotate(target); drawGlobe(); return; }
+    const interp = window.d3.interpolateArray(start, target);
+    const dur = 700, t0 = performance.now();
+    const step = (t)=>{
+      const k = Math.min(1, (t - t0)/dur);
+      const e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k + 2, 2)/2;
+      globe.projection.rotate(interp(e));
+      drawGlobe();
+      if(k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  function attachGlobeInteraction(){
+    const c = globe.canvas;
+    let dragging = false, lastX = 0, lastY = 0, moved = 0;
+    c.addEventListener('pointerdown', e=>{
+      dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
+      globe.spinning = false; stopGlobeLoop();
+      try{ c.setPointerCapture(e.pointerId); }catch(_){}
+    });
+    c.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+      const r = globe.projection.rotate(), k = 0.4;
+      const lat = Math.max(-90, Math.min(90, r[1] - dy*k));
+      globe.projection.rotate([r[0] + dx*k, lat, r[2]]);
+      drawGlobe();
+    });
+    const end = (e)=>{
+      if(!dragging) return;
+      dragging = false;
+      try{ c.releasePointerCapture(e.pointerId); }catch(_){}
+      if(moved < 6) handleGlobeClick(e);
+    };
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+  }
+  function handleGlobeClick(e){
+    const rect = globe.canvas.getBoundingClientRect();
+    const inv = globe.projection.invert([e.clientX - rect.left, e.clientY - rect.top]);
+    if(!inv || isNaN(inv[0]) || isNaN(inv[1])) return;
+    if(!pointVisible(inv)) return; // clicked off the globe disk
+    selectSkyPoint(inv[0], inv[1], null);
+  }
+
+  let skySel = null, skySelToken = 0, skyClockTimer = null;
+  function fmtCoord(v, axis){
+    const dir = axis === 'NS' ? (v >= 0 ? 'N' : 'S') : (v >= 0 ? 'E' : 'W');
+    return Math.abs(v).toFixed(1) + '°' + dir;
+  }
+  function skySelTimeString(){
+    if(!skySel) return '—';
+    if(skySel.tz){
+      return new Intl.DateTimeFormat('en-US', {timeZone:skySel.tz, hour:'numeric', minute:'2-digit'}).format(new Date());
+    }
+    // fallback before/without the timezone lookup: estimate from longitude
+    const d = new Date(Date.now() + (skySel.lon/15)*3600000);
+    let h = d.getUTCHours(); const m = d.getUTCMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12; if(h === 0) h = 12;
+    return h + ':' + String(m).padStart(2,'0') + ' ' + ampm;
+  }
+  function skySelDayNight(){
+    if(skySel && skySel.isDay != null) return skySel.isDay ? 'Daytime' : 'Night';
+    const d = new Date(Date.now() + ((skySel ? skySel.lon : 0)/15)*3600000);
+    const h = d.getUTCHours();
+    return (h >= 6 && h < 18) ? 'Daytime' : 'Night';
+  }
+  function renderSkySelected(loading){
+    const el = document.getElementById('skySelected');
+    if(!el) return;
+    if(!skySel){ el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    const name = skySel.name || (fmtCoord(skySel.lat,'NS') + ', ' + fmtCoord(skySel.lon,'EW'));
+    const sub = (loading && !skySel.tz)
+      ? 'Finding local time…'
+      : skySelDayNight() + (skySel.temp != null ? ' · ' + fmtTemp(skySel.temp) + '°' : '');
+    el.innerHTML = `<div class="sky-sel-name">${escapeHtml(name)}</div>
+        <div class="sky-sel-time" id="skySelTime">${skySelTimeString()}</div>
+        <div class="sky-sel-sub">${escapeHtml(sub)}</div>`;
+  }
+  function startSkyClock(){
+    clearInterval(skyClockTimer);
+    const tick = ()=>{ const t = document.getElementById('skySelTime'); if(t && skySel) t.textContent = skySelTimeString(); };
+    tick();
+    skyClockTimer = setInterval(tick, 1000);
+  }
+  function stopSkyClock(){ clearInterval(skyClockTimer); skyClockTimer = null; }
+  async function selectSkyPoint(lon, lat, name){
+    const token = ++skySelToken;
+    globe.marker = [lon, lat];
+    if(globe.inited) flyGlobeTo(lon, lat);
+    skySel = {lat, lon, name: name || null, tz:null, utcOffset:null, temp:null, isDay:null};
+    renderSkySelected(true);
+    startSkyClock();
+    try{
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`+
+        `&current=temperature_2m,is_day&timezone=auto`;
+      const r = await fetchWithTimeout(url, null, 8000);
+      const j = await r.json();
+      if(token !== skySelToken) return;
+      skySel.tz = j.timezone || null;
+      skySel.utcOffset = j.utc_offset_seconds;
+      if(j.current){ skySel.temp = j.current.temperature_2m; skySel.isDay = j.current.is_day === 1; }
+    }catch(e){ /* offline — the longitude estimate above still shows a time */ }
+    if(token === skySelToken){
+      if(!skySel.name){
+        reverseGeocode(lat, lon).then(nm=>{
+          // 'Your Location' is reverseGeocode's generic fallback for unnamed
+          // points (open ocean, remote areas) — keep the coordinates instead.
+          if(token === skySelToken && nm && nm !== 'Your Location'){ skySel.name = nm; renderSkySelected(false); }
+        }).catch(()=>{});
+      }
+      renderSkySelected(false);
+    }
+  }
   function updateSkyView(){
     const now = new Date();
-    document.getElementById('skyLocalTime').textContent = now.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
-    document.getElementById('skyLocalDate').textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
-
-    const nowHour = now.getHours() + now.getMinutes()/60;
-    let sunriseHour = 6, sunsetHour = 18;
-    if(weatherState.loaded && weatherState.data && weatherState.data.daily){
-      const sr = new Date(weatherState.data.daily.sunrise[0]);
-      const ss = new Date(weatherState.data.daily.sunset[0]);
-      sunriseHour = sr.getHours() + sr.getMinutes()/60;
-      sunsetHour = ss.getHours() + ss.getMinutes()/60;
+    const list = document.getElementById('worldClockList');
+    if(list){
+      list.innerHTML = WORLD_CITIES.map(([city, tz], i)=>{
+        const h = cityHour(tz);
+        const timeStr = new Intl.DateTimeFormat('en-US', {timeZone:tz, hour:'numeric', minute:'2-digit'}).format(now);
+        const label = (h>=6 && h<18) ? 'Daytime' : (h>=5&&h<6)||(h>=18&&h<19.5) ? 'Twilight' : 'Night';
+        return `<button type="button" class="world-row" data-idx="${i}">
+            <span class="world-row-icon">${dayNightIcon(h)}</span>
+            <span style="flex:1;"><span class="world-row-city">${city}</span><span class="world-row-sub">${label}</span></span>
+            <span class="world-row-time">${timeStr}</span>
+          </button>`;
+      }).join('');
+      list.querySelectorAll('.world-row').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const [city, tz, lat, lon] = WORLD_CITIES[parseInt(btn.dataset.idx, 10)];
+          selectSkyPoint(lon, lat, city);
+        });
+      });
     }
-    document.getElementById('skyDialWrap').innerHTML = skyDialSvg(nowHour, sunriseHour, sunsetHour);
-
-    document.getElementById('worldClockList').innerHTML = WORLD_CITIES.map(([city, tz])=>{
-      const h = cityHour(tz);
-      const timeStr = new Intl.DateTimeFormat('en-US', {timeZone:tz, hour:'numeric', minute:'2-digit'}).format(now);
-      const label = (h>=6 && h<18) ? 'Daytime' : (h>=5&&h<6)||(h>=18&&h<19.5) ? 'Twilight' : 'Night';
-      return `<div class="world-row">
-          <span class="world-row-icon">${dayNightIcon(h)}</span>
-          <span style="flex:1;"><div class="world-row-city">${city}</div><div class="world-row-sub">${label}</div></span>
-          <span class="world-row-time">${timeStr}</span>
-        </div>`;
-    }).join('');
+    if(skySel) renderSkySelected(false);
+    if(globe.inited) drawGlobe();
   }
   document.getElementById('skyBack').addEventListener('click', ()=> showView('home'));
+  attachAutocomplete(document.getElementById('skySearch'), document.getElementById('skySuggest'), sel=>{
+    if(sel) selectSkyPoint(sel.lon, sel.lat, sel.short);
+  });
+  window.addEventListener('resize', ()=>{
+    if(currentView === 'sky' && globe.inited){ sizeGlobe(); fitGlobe(); drawGlobe(); }
+  });
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && currentView === 'sky' && globe.spinning) runGlobeLoop();
+  });
 
   // Every network call in this app gets a hard timeout. Without one, a
   // request that never resolves OR rejects (silently blocked by a proxy,
