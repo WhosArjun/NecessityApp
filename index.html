@@ -3,17 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7EC8FF">
+<meta name="description" content="Sonder — a calm, single-file weather forecast and turn-by-turn navigator. No account, no build, no API keys.">
 <title>Sonder — Weather &amp; Navigate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://api.open-meteo.com">
+<link rel="preconnect" href="https://geocoding-api.open-meteo.com">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<!-- Leaflet's CSS + JS are loaded lazily, only when the Navigate view is first
+     opened (see loadLeaflet()), so the home and weather screens never pay for
+     the map library on startup. -->
 <style>
   :root{
+    /* --- palette (sky gradient is themed at runtime) --- */
     --sky-1:#7EC8FF; --sky-2:#B9E3FF; --sky-3:#EAF6FF;
     --text:#1B1F2A; --text-dim:rgba(27,31,42,.62);
     --glass:rgba(255,255,255,.45); --glass-border:rgba(255,255,255,.7); --glass-strong:rgba(255,255,255,.62);
     --scrim: rgba(0,0,0,0);
-    --radius-lg:28px; --radius-md:20px; --radius-sm:14px;
+    /* --- semantic accents (stable across light/dark) --- */
+    --accent:#3B82F6; --accent-strong:#2563EB; --accent-soft:rgba(59,130,246,.12);
+    --danger:#C24A2D; --warn:#B8862E; --success:#2E9E6B;
+    --focus-ring: var(--accent);
+    /* --- radii --- */
+    --radius-lg:28px; --radius-md:20px; --radius-sm:14px; --radius-pill:999px;
+    /* --- spacing scale (4px base) --- */
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+    /* --- elevation --- */
+    --shadow-sm:0 4px 12px rgba(0,0,0,.12);
+    --shadow-md:0 8px 24px rgba(0,0,0,.18);
+    --shadow-lg:0 16px 40px rgba(0,0,0,.24);
+    /* --- motion --- */
+    --ease-out:cubic-bezier(.2,.8,.3,1); --ease-in-out:cubic-bezier(.4,0,.2,1);
+    --dur-fast:.16s; --dur-mid:.28s; --dur-slow:.42s;
     --font-display:'Fraunces', serif; --font-body:'Inter', system-ui, -apple-system, sans-serif;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -26,6 +50,21 @@
   }
   button, input{font-family:inherit;}
   button{cursor:pointer;}
+  /* One consistent, high-contrast focus ring across the whole app. Uses
+     :focus-visible so it only shows for keyboard/AT users, not mouse taps. */
+  a:focus-visible, button:focus-visible, input:focus-visible,
+  [tabindex]:focus-visible, summary:focus-visible{
+    outline:2.5px solid var(--focus-ring); outline-offset:2px; border-radius:6px;
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  .skip-link{
+    position:absolute; left:8px; top:-60px; z-index:100; padding:10px 16px; border-radius:12px;
+    background:#1B1F2A; color:#fff; font-size:13px; font-weight:700; transition:top var(--dur-fast) var(--ease-out);
+  }
+  .skip-link:focus{top:8px;}
 
   .stage{position:relative; width:430px; height:900px; max-height:96vh; display:flex; align-items:center; justify-content:center;}
   .glow{
@@ -392,9 +431,131 @@
   }
   .settings-overlay.show{display:flex;}
 
+  /* ---------- SMART INSIGHTS (weather) ---------- */
+  .insight-row{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+  .insight-card{
+    display:flex; align-items:flex-start; gap:12px; padding:13px 15px; border-radius:var(--radius-sm);
+    background:var(--glass); border:1px solid var(--glass-border);
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+  }
+  .insight-icon{
+    width:32px; height:32px; border-radius:10px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-soft); color:var(--accent);
+  }
+  .insight-icon svg{width:18px; height:18px;}
+  .insight-body{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .insight-title{font-size:13.5px; font-weight:700; line-height:1.25;}
+  .insight-sub{font-size:12px; color:var(--text-dim); margin-top:2px; line-height:1.35;}
+
+  /* ---------- SKELETON LOADER ---------- */
+  .sk{position:relative; overflow:hidden; background:var(--glass); border-radius:var(--radius-md);}
+  .sk::after{
+    content:''; position:absolute; inset:0; transform:translateX(-100%);
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+    animation:shimmer 1.35s infinite;
+  }
+  @keyframes shimmer{100%{transform:translateX(100%);}}
+  .sk-block{margin:0 auto; border-radius:14px;}
+  .weather-skeleton{padding:14px 4px; display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .weather-skeleton .sk-line{height:14px; width:60%; border-radius:7px;}
+  .weather-skeleton .sk-temp{height:96px; width:150px; border-radius:22px; margin-top:6px;}
+  .weather-skeleton .sk-card{height:96px; width:100%; border-radius:var(--radius-md);}
+  .weather-skeleton .sk-card.tall{height:180px;}
+
+  /* ---------- TOAST ---------- */
+  .toast-wrap{
+    position:absolute; left:0; right:0; bottom:26px; z-index:60; display:flex; flex-direction:column;
+    align-items:center; gap:8px; pointer-events:none; padding:0 20px;
+  }
+  .toast{
+    display:flex; align-items:center; gap:10px; max-width:100%; padding:11px 16px; border-radius:var(--radius-pill);
+    background:rgba(27,31,42,.94); color:#fff; font-size:13px; font-weight:600; box-shadow:var(--shadow-lg);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    transform:translateY(14px); opacity:0; transition:transform var(--dur-mid) var(--ease-out), opacity var(--dur-mid) var(--ease-out);
+  }
+  .toast.show{transform:translateY(0); opacity:1;}
+  .toast svg{width:16px; height:16px; flex:0 0 auto;}
+  .toast.success svg{color:#7ee0a9;}
+  .toast.error svg{color:#ff9c8a;}
+
+  /* ---------- COMMAND PALETTE ---------- */
+  .cmd-overlay{
+    position:absolute; inset:0; z-index:70; display:none; flex-direction:column; align-items:center;
+    padding-top:88px; background:rgba(10,12,16,.42); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  }
+  .cmd-overlay.show{display:flex; animation:cmdFade var(--dur-fast) var(--ease-out);}
+  @keyframes cmdFade{from{opacity:0;} to{opacity:1;}}
+  .cmd-panel{
+    width:min(360px, calc(100% - 36px)); background:rgba(255,255,255,.98); color:#1B1F2A;
+    border-radius:20px; box-shadow:var(--shadow-lg); overflow:hidden;
+    transform:translateY(-8px) scale(.99); animation:cmdPop var(--dur-mid) var(--ease-out) forwards;
+  }
+  @keyframes cmdPop{to{transform:translateY(0) scale(1);}}
+  .cmd-search{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid rgba(0,0,0,.07);}
+  .cmd-search svg{width:18px; height:18px; color:#8b93a1; flex:0 0 auto;}
+  .cmd-search input{flex:1; border:0; outline:none; font-size:15px; background:transparent; color:#1B1F2A;}
+  .cmd-hint-key{
+    font-size:10.5px; font-weight:700; color:#8b93a1; border:1px solid #E4E7EC; border-radius:6px;
+    padding:2px 6px; background:#F5F6F8; flex:0 0 auto;
+  }
+  .cmd-list{max-height:320px; overflow-y:auto; padding:6px;}
+  .cmd-list::-webkit-scrollbar{width:0;}
+  .cmd-group-label{font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#a2a9b4; padding:10px 12px 4px;}
+  .cmd-item{
+    display:flex; align-items:center; gap:12px; width:100%; text-align:left; border:0; background:none;
+    padding:11px 12px; border-radius:12px; color:#1B1F2A; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .cmd-item-icon{width:30px; height:30px; border-radius:9px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent);}
+  .cmd-item-icon svg{width:16px; height:16px;}
+  .cmd-item-label{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .cmd-item.active, .cmd-item:hover{background:var(--accent-soft);}
+  .cmd-item-hint{margin-left:auto; font-size:11px; color:#a2a9b4; font-weight:600; flex:0 0 auto;}
+  .cmd-empty{padding:22px 16px; text-align:center; color:#8b93a1; font-size:13px;}
+
+  /* ---------- ONBOARDING ---------- */
+  .ob-overlay{
+    position:absolute; inset:0; z-index:80; display:none; flex-direction:column; justify-content:flex-end;
+    background:linear-gradient(180deg, rgba(10,12,16,.15), rgba(10,12,16,.55));
+  }
+  .ob-overlay.show{display:flex; animation:cmdFade var(--dur-mid) var(--ease-out);}
+  .ob-card{
+    margin:0 14px 14px; padding:24px 22px 20px; border-radius:26px; color:#1B1F2A;
+    background:rgba(255,255,255,.97); box-shadow:var(--shadow-lg); backdrop-filter:blur(20px);
+  }
+  .ob-slide{display:none;}
+  .ob-slide.active{display:block; animation:obSlide var(--dur-slow) var(--ease-out);}
+  @keyframes obSlide{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
+  .ob-emoji{
+    width:56px; height:56px; border-radius:18px; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-soft); color:var(--accent); margin-bottom:14px;
+  }
+  .ob-emoji svg{width:30px; height:30px;}
+  .ob-title{font-family:var(--font-display); font-size:26px; font-weight:500; margin:0 0 8px; line-height:1.1;}
+  .ob-text{font-size:14px; color:#57606b; line-height:1.5; margin:0;}
+  .ob-goals{display:flex; flex-direction:column; gap:8px; margin-top:16px;}
+  .ob-goal{
+    display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:13px 15px; border-radius:16px;
+    border:1.5px solid #E4E7EC; background:#fff; color:#1B1F2A; font-size:14px; font-weight:600;
+    transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  }
+  .ob-goal:hover{border-color:var(--accent); background:var(--accent-soft);}
+  .ob-goal.selected{border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 3px var(--accent-soft);}
+  .ob-goal .ob-goal-ico{width:34px; height:34px; border-radius:11px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent);}
+  .ob-goal .ob-goal-ico svg{width:18px; height:18px;}
+  .ob-goal > span:last-child{display:flex; flex-direction:column; min-width:0;}
+  .ob-goal-sub{font-size:11.5px; font-weight:500; color:#8b93a1; margin-top:1px;}
+  .ob-foot{display:flex; align-items:center; justify-content:space-between; margin-top:20px;}
+  .ob-dots{display:flex; gap:6px;}
+  .ob-dot{width:7px; height:7px; border-radius:50%; background:#D6D9E0; transition:background var(--dur-fast), width var(--dur-fast);}
+  .ob-dot.active{background:var(--accent); width:20px; border-radius:4px;}
+  .ob-btns{display:flex; gap:10px; align-items:center;}
+  .ob-skip{border:0; background:none; color:#8b93a1; font-size:13.5px; font-weight:700;}
+  .ob-next{border:0; background:#1B1F2A; color:#fff; font-weight:700; font-size:14px; padding:11px 22px; border-radius:var(--radius-pill); box-shadow:var(--shadow-sm);}
+
   @media (prefers-reduced-motion: reduce){
     .sky{animation:none;}
-    *{transition-duration:.01ms !important;}
+    .sk::after{animation:none;}
+    *{transition-duration:.01ms !important; animation-duration:.01ms !important;}
   }
   @media (max-width:480px), (max-height:760px){
     .stage{width:100%; height:100vh; max-height:100vh;}
@@ -404,6 +565,7 @@
 </style>
 </head>
 <body>
+<a href="#mainContent" class="skip-link">Skip to content</a>
 
 <div class="stage">
   <div class="glow" id="glow"></div>
@@ -411,14 +573,19 @@
     <div class="sky" id="sky"><div class="sun" id="sunGlow"></div></div>
 
     <!-- HOME -->
-    <section class="view active" id="view-home">
+    <section class="view active" id="view-home" aria-label="Home">
       <div class="statusbar">
         <span id="clockHome">9:41</span>
-        <button class="icon-btn" id="settingsBtn" aria-label="Settings" style="width:34px;height:34px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
+        <span style="display:flex; gap:8px;">
+          <button class="icon-btn" id="cmdBtn" aria-label="Open command palette (Ctrl or Cmd + K)" title="Search & commands (⌘K)" style="width:34px;height:34px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          </button>
+          <button class="icon-btn" id="settingsBtn" aria-label="Settings" style="width:34px;height:34px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </span>
       </div>
-      <div class="home-content">
+      <div class="home-content" id="mainContent">
         <p class="eyebrow" id="greeting">GOOD MORNING</p>
         <h1 class="home-title">Two calm<br>tools, one sky.</h1>
         <p class="home-sub">Check the forecast or get where you're going — without the noise.</p>
@@ -465,23 +632,23 @@
         <div style="font-size:16px; font-weight:700;">Settings</div>
       </div>
       <div style="padding:6px 20px 30px; overflow-y:auto;">
-        <p class="settings-label">Temperature units</p>
-        <div class="pill-toggle" id="settingsUnit" style="background:#fff; border-color:#E4E7EC;">
-          <button data-unit="f">°F</button>
-          <button data-unit="c">°C</button>
+        <p class="settings-label" id="lblUnit">Temperature units</p>
+        <div class="pill-toggle" id="settingsUnit" role="group" aria-labelledby="lblUnit" style="background:#fff; border-color:#E4E7EC;">
+          <button data-unit="f" aria-pressed="false">°F</button>
+          <button data-unit="c" aria-pressed="false">°C</button>
         </div>
 
-        <p class="settings-label">Sky theme</p>
-        <div class="pill-toggle" id="settingsTheme" style="background:#fff; border-color:#E4E7EC; width:100%;">
-          <button data-theme="auto" style="flex:1;">Auto</button>
-          <button data-theme="light" style="flex:1;">Light</button>
-          <button data-theme="dark" style="flex:1;">Dark</button>
+        <p class="settings-label" id="lblTheme">Sky theme</p>
+        <div class="pill-toggle" id="settingsTheme" role="group" aria-labelledby="lblTheme" style="background:#fff; border-color:#E4E7EC; width:100%;">
+          <button data-theme="auto" aria-pressed="false" style="flex:1;">Auto</button>
+          <button data-theme="light" aria-pressed="false" style="flex:1;">Light</button>
+          <button data-theme="dark" aria-pressed="false" style="flex:1;">Dark</button>
         </div>
 
-        <p class="settings-label">Navigation voice guidance</p>
-        <div class="pill-toggle" id="settingsVoice" style="background:#fff; border-color:#E4E7EC; width:100%;">
-          <button data-voice="on" style="flex:1;">On</button>
-          <button data-voice="off" style="flex:1;">Off</button>
+        <p class="settings-label" id="lblVoice">Navigation voice guidance</p>
+        <div class="pill-toggle" id="settingsVoice" role="group" aria-labelledby="lblVoice" style="background:#fff; border-color:#E4E7EC; width:100%;">
+          <button data-voice="on" aria-pressed="false" style="flex:1;">On</button>
+          <button data-voice="off" aria-pressed="false" style="flex:1;">Off</button>
         </div>
 
         <p class="settings-note">Settings apply for this session — they reset if the app is reloaded.</p>
@@ -489,14 +656,14 @@
     </div>
 
     <!-- WEATHER -->
-    <section class="view" id="view-weather">
+    <section class="view" id="view-weather" aria-label="Weather">
       <div class="subhead">
         <button class="icon-btn" id="weatherBack" aria-label="Back to home">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <div class="pill-toggle" id="unitToggle">
-          <button data-unit="f" class="active">°F</button>
-          <button data-unit="c">°C</button>
+        <div class="pill-toggle" id="unitToggle" role="group" aria-label="Temperature units">
+          <button data-unit="f" class="active" aria-pressed="true">°F</button>
+          <button data-unit="c" aria-pressed="false">°C</button>
         </div>
       </div>
       <div class="loc-chip-row" id="locChipRow"></div>
@@ -506,7 +673,7 @@
           <div class="suggest-list" id="locAddSuggest"></div>
         </div>
       </div>
-      <div class="scroll" id="weatherScroll">
+      <div class="scroll" id="weatherScroll" aria-live="polite" aria-busy="true">
         <div class="center-msg" id="weatherLoading">
           <div class="spinner"></div>
           <p class="msg-title" style="font-size:18px;">Finding your sky…</p>
@@ -516,13 +683,13 @@
     </section>
 
     <!-- NAVIGATE -->
-    <section class="view" id="view-nav">
-      <div id="map"></div>
+    <section class="view" id="view-nav" aria-label="Navigate">
+      <div id="map" role="application" aria-label="Map"></div>
       <button class="nav-back" id="navBack" aria-label="Back to home">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <div class="nav-top">
-        <div class="nav-banner" id="navBanner"></div>
+        <div class="nav-banner" id="navBanner" role="status" aria-live="polite"></div>
         <div class="nav-field">
           <div class="nav-search">
             <span class="dot" style="background:#3B82F6;"></span>
@@ -541,14 +708,14 @@
           <div class="suggest-list" id="destSuggest"></div>
           <div class="recent-chip-row" id="recentChipRow" style="display:none;"></div>
         </div>
-        <div class="pill-toggle" id="travelModeToggle" style="align-self:flex-start; background:rgba(255,255,255,.94);">
-          <button data-mode="driving" class="active">
+        <div class="pill-toggle" id="travelModeToggle" role="group" aria-label="Travel mode" style="align-self:flex-start; background:rgba(255,255,255,.94);">
+          <button data-mode="driving" class="active" aria-pressed="true" aria-label="Driving">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2-6a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 6M3 13v5a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h12v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-5M3 13h18"/><circle cx="7.5" cy="17" r="1.3"/><circle cx="16.5" cy="17" r="1.3"/></svg>
           </button>
-          <button data-mode="walking">
+          <button data-mode="walking" aria-pressed="false" aria-label="Walking">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="1.6"/><path d="M10 22l1.5-6-2-1.5.5-5 3-2 3 2 2 1M13 9l3 2-1 5M8 15l-2.5 2M14 16l2 2 3-1"/></svg>
           </button>
-          <button data-mode="cycling">
+          <button data-mode="cycling" aria-pressed="false" aria-label="Cycling">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3.2"/><circle cx="18" cy="17" r="3.2"/><path d="M6 17l4-8h4l3 8M10 9h5M8 9l2-4h3"/></svg>
           </button>
         </div>
@@ -556,7 +723,7 @@
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
-      <div class="nav-status" id="navStatus"></div>
+      <div class="nav-status" id="navStatus" role="status" aria-live="polite"></div>
       <div class="nav-sheet" id="navSheet">
         <div class="sheet-handle"></div>
         <p class="sheet-title" id="sheetTitle">Destination</p>
@@ -608,7 +775,7 @@
     </section>
 
     <!-- WORLD SKY -->
-    <section class="view" id="view-sky">
+    <section class="view" id="view-sky" aria-label="World Sky">
       <div class="subhead">
         <button class="icon-btn" id="skyBack" aria-label="Back to home">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -624,10 +791,65 @@
       </div>
     </section>
 
+    <!-- COMMAND PALETTE -->
+    <div class="cmd-overlay" id="cmdOverlay" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="cmd-panel" role="document">
+        <div class="cmd-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="cmdInput" type="text" placeholder="Search actions or a place…" autocomplete="off"
+                 role="combobox" aria-expanded="true" aria-controls="cmdList" aria-autocomplete="list" aria-label="Search actions or a place">
+          <span class="cmd-hint-key">Esc</span>
+        </div>
+        <div class="cmd-list" id="cmdList" role="listbox" aria-label="Commands"></div>
+      </div>
+    </div>
+
+    <!-- ONBOARDING -->
+    <div class="ob-overlay" id="obOverlay" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+      <div class="ob-card">
+        <div class="ob-slide active" data-slide="0">
+          <div class="ob-emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></div>
+          <h2 class="ob-title" id="obTitle">Welcome to Sonder</h2>
+          <p class="ob-text">Two calm tools under one sky — a live forecast and a turn-by-turn navigator. No account, no clutter. What brings you here today?</p>
+          <div class="ob-goals">
+            <button type="button" class="ob-goal" data-goal="weather">
+              <span class="ob-goal-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>
+              <span><span>Check the weather</span><span class="ob-goal-sub">Live conditions, hourly & 8-day</span></span>
+            </button>
+            <button type="button" class="ob-goal" data-goal="nav">
+              <span class="ob-goal-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg></span>
+              <span><span>Get somewhere</span><span class="ob-goal-sub">Turn-by-turn with spoken guidance</span></span>
+            </button>
+            <button type="button" class="ob-goal" data-goal="sky">
+              <span class="ob-goal-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9s1.3-6.4 3.8-9z"/></svg></span>
+              <span><span>Just exploring</span><span class="ob-goal-sub">See day & night across the world</span></span>
+            </button>
+          </div>
+        </div>
+        <div class="ob-slide" data-slide="1">
+          <div class="ob-emoji"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8 2v4M16 2v4M3 10h18"/></svg></div>
+          <h2 class="ob-title">A few power moves</h2>
+          <p class="ob-text">Press <b>Ctrl / ⌘ + K</b> anytime for the command palette — jump between tools, switch units or theme, or search a place. Press <b>?</b> to see every shortcut, and <b>Esc</b> to step back.</p>
+        </div>
+        <div class="ob-foot">
+          <div class="ob-dots" aria-hidden="true">
+            <span class="ob-dot active" data-dot="0"></span>
+            <span class="ob-dot" data-dot="1"></span>
+          </div>
+          <div class="ob-btns">
+            <button type="button" class="ob-skip" id="obSkip">Skip</button>
+            <button type="button" class="ob-next" id="obNext">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOASTS -->
+    <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
+
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script>
 (function(){
   "use strict";
@@ -706,6 +928,10 @@
     root.style.setProperty('--sky-1', p.stops[0]);
     root.style.setProperty('--sky-2', p.stops[1]);
     root.style.setProperty('--sky-3', p.stops[2]);
+    // Keep the mobile browser chrome (address bar / status bar) in step with
+    // the current sky so the app feels edge-to-edge.
+    const tc = document.querySelector('meta[name="theme-color"]');
+    if(tc) tc.setAttribute('content', p.stops[0]);
     if(p.light){
       root.style.setProperty('--text', '#1B1F2A');
       root.style.setProperty('--text-dim', 'rgba(27,31,42,.62)');
@@ -751,15 +977,44 @@
     glow.style.top = y+'%';
   }
 
+  /* ---------------- LAZY LEAFLET ---------------- */
+  // Leaflet (map library + CSS) is ~150KB and only the Navigate view needs
+  // it, so it's fetched on demand the first time that view opens instead of
+  // on every page load. Returns a promise that resolves once L is ready.
+  let leafletPromise = null;
+  function loadLeaflet(){
+    if(window.L) return Promise.resolve();
+    if(leafletPromise) return leafletPromise;
+    leafletPromise = new Promise((resolve, reject)=>{
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+      js.async = true;
+      js.onload = ()=> resolve();
+      js.onerror = ()=> reject(new Error('leaflet-load-failed'));
+      document.body.appendChild(js);
+    });
+    return leafletPromise;
+  }
+
   /* ---------------- VIEW ROUTING ---------------- */
   const views = {home:'view-home', weather:'view-weather', nav:'view-nav', sky:'view-sky'};
   let mapInited = false, skyInterval = null;
+  let currentView = 'home';
   function showView(name){
+    currentView = name;
     Object.values(views).forEach(id=>document.getElementById(id).classList.remove('active'));
     document.getElementById(views[name]).classList.add('active');
     if(name==='weather' && !weatherState.loaded && !weatherState.loading){ initWeather(); }
     if(name==='nav'){
-      setTimeout(()=>{ if(!mapInited){ initMap(); mapInited = true; } else { map.invalidateSize(); } }, 30);
+      loadLeaflet().then(()=>{
+        setTimeout(()=>{ if(!mapInited){ initMap(); mapInited = true; } else { map.invalidateSize(); } }, 30);
+      }).catch(()=>{
+        showNavBanner('The map library couldn\'t be loaded — check your connection and reopen Navigate.');
+      });
     }
     if(name==='sky'){
       updateSkyView();
@@ -768,6 +1023,10 @@
     } else {
       clearInterval(skyInterval);
     }
+    // Move focus to the newly shown view for screen-reader / keyboard users.
+    const viewEl = document.getElementById(views[name]);
+    viewEl.setAttribute('tabindex', '-1');
+    try{ viewEl.focus({preventScroll:true}); }catch(e){ viewEl.focus(); }
   }
   document.querySelectorAll('.app-card').forEach(btn=>{
     btn.addEventListener('click', ()=> showView(btn.dataset.target));
@@ -804,32 +1063,88 @@
   updateClockAndGreeting();
   setInterval(updateClockAndGreeting, 30000);
 
+  /* ---------------- UI UTILITIES ---------------- */
+  // Update a segmented control: mark the matching button active and mirror
+  // that onto aria-pressed so assistive tech announces the selection.
+  function selectSegment(container, matchFn, sideEffect){
+    container.querySelectorAll('button').forEach(b=>{
+      const on = matchFn(b);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if(sideEffect) sideEffect();
+  }
+
+  // Small, non-blocking toast for confirmations and gentle errors. Announced
+  // via the aria-live wrapper so screen-reader users hear it too.
+  const TOAST_ICONS = {
+    success:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+    error:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>',
+    info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>'
+  };
+  function toast(message, kind='info', ms=2600){
+    const wrap = document.getElementById('toastWrap');
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.innerHTML = (TOAST_ICONS[kind]||'') + '<span></span>';
+    el.querySelector('span').textContent = message;
+    wrap.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add('show'));
+    setTimeout(()=>{
+      el.classList.remove('show');
+      setTimeout(()=> el.remove(), 320);
+    }, ms);
+  }
+
+  // Focus trap + open/close bookkeeping shared by every modal overlay
+  // (command palette, onboarding). Escape closing is handled centrally in
+  // the global keydown listener so nested overlays behave predictably.
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  let lastFocusBeforeOverlay = null;
+  function trapFocus(container, e){
+    const items = [...container.querySelectorAll(FOCUSABLE)].filter(el=> el.offsetParent !== null || el === document.activeElement);
+    if(!items.length) return;
+    const first = items[0], last = items[items.length-1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+
   /* ---------------- SETTINGS ---------------- */
-  document.getElementById('settingsBtn').addEventListener('click', ()=>{
-    document.querySelectorAll('#settingsUnit button').forEach(b=> b.classList.toggle('active', b.dataset.unit===weatherState.unit));
-    document.querySelectorAll('#settingsTheme button').forEach(b=> b.classList.toggle('active', b.dataset.theme===themeOverride));
-    document.querySelectorAll('#settingsVoice button').forEach(b=> b.classList.toggle('active', b.dataset.voice===(voiceOn?'on':'off')));
-    document.getElementById('settingsOverlay').classList.add('show');
-  });
-  document.getElementById('settingsClose').addEventListener('click', ()=> document.getElementById('settingsOverlay').classList.remove('show'));
+  let settingsOpener = null;
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  function openSettings(){
+    selectSegment(document.getElementById('settingsUnit'), b=> b.dataset.unit===weatherState.unit);
+    selectSegment(document.getElementById('settingsTheme'), b=> b.dataset.theme===themeOverride);
+    selectSegment(document.getElementById('settingsVoice'), b=> b.dataset.voice===(voiceOn?'on':'off'));
+    settingsOpener = document.activeElement;
+    settingsOverlay.classList.add('show');
+    document.getElementById('settingsClose').focus();
+  }
+  function closeSettings(){
+    settingsOverlay.classList.remove('show');
+    if(settingsOpener && settingsOpener.focus) settingsOpener.focus();
+  }
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('settingsClose').addEventListener('click', closeSettings);
+  settingsOverlay.addEventListener('keydown', e=>{ if(e.key==='Tab' && settingsOverlay.classList.contains('show')) trapFocus(settingsOverlay, e); });
   document.getElementById('settingsUnit').addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     weatherState.unit = b.dataset.unit;
-    document.querySelectorAll('#settingsUnit button').forEach(x=> x.classList.toggle('active', x===b));
-    document.querySelectorAll('#unitToggle button').forEach(x=> x.classList.toggle('active', x.dataset.unit===weatherState.unit));
+    selectSegment(document.getElementById('settingsUnit'), x=> x===b);
+    selectSegment(document.getElementById('unitToggle'), x=> x.dataset.unit===weatherState.unit);
     if(weatherState.lat!=null) fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
   });
   document.getElementById('settingsTheme').addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     themeOverride = b.dataset.theme;
-    document.querySelectorAll('#settingsTheme button').forEach(x=> x.classList.toggle('active', x===b));
+    selectSegment(document.getElementById('settingsTheme'), x=> x===b);
     if(weatherState.loaded && weatherState.data) renderWeather(weatherState.data, weatherState.place, weatherState.aqi, weatherState.alerts);
     else updateClockAndGreeting();
   });
   document.getElementById('settingsVoice').addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     voiceOn = b.dataset.voice === 'on';
-    document.querySelectorAll('#settingsVoice button').forEach(x=> x.classList.toggle('active', x===b));
+    selectSegment(document.getElementById('settingsVoice'), x=> x===b);
   });
 
   document.getElementById('unitToggle').addEventListener('click', (e)=>{
@@ -837,10 +1152,10 @@
     const unit = b.dataset.unit;
     if(unit===weatherState.unit) return;
     weatherState.unit = unit;
-    document.querySelectorAll('#unitToggle button').forEach(x=>x.classList.toggle('active', x.dataset.unit===unit));
+    selectSegment(document.getElementById('unitToggle'), x=> x.dataset.unit===unit);
     if(weatherState.lat!=null) fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
   });
-  document.querySelectorAll('#unitToggle button').forEach(x=>x.classList.toggle('active', x.dataset.unit===weatherState.unit));
+  selectSegment(document.getElementById('unitToggle'), x=> x.dataset.unit===weatherState.unit);
 
   // Human-readable message for a GeolocationPositionError, since sandboxed
   // previews (like an in-chat artifact frame) commonly block geolocation
@@ -855,6 +1170,7 @@
   function initWeather(){
     weatherState.loading = true;
     const scroll = document.getElementById('weatherScroll');
+    scroll.setAttribute('aria-busy', 'true');
     scroll.innerHTML = `<div class="center-msg" id="weatherLoading"><div class="spinner"></div>
       <p class="msg-title" style="font-size:18px;">Finding your sky…</p>
       <p id="weatherLoadingHint">Allow location access to see live conditions.</p></div>`;
@@ -872,6 +1188,7 @@
       pos => {
         weatherState.lat = pos.coords.latitude;
         weatherState.lon = pos.coords.longitude;
+        showWeatherSkeleton(); // we have coords — swap the "finding you" spinner for a content-shaped skeleton
         reverseGeocode(weatherState.lat, weatherState.lon).then(name=>{
           weatherState.place = name;
           fetchWeather(weatherState.lat, weatherState.lon, name);
@@ -881,6 +1198,23 @@
       err => { showWeatherManualSearch(geoErrorMessage(err)); },
       {timeout:8000, maximumAge:300000}
     );
+  }
+
+  // A content-shaped shimmer that mirrors the real forecast layout, so the
+  // wait reads as "loading this screen" rather than a bare spinner.
+  function showWeatherSkeleton(){
+    const scroll = document.getElementById('weatherScroll');
+    if(!scroll) return;
+    scroll.setAttribute('aria-busy', 'true');
+    scroll.innerHTML = `<div class="weather-skeleton" aria-hidden="true">
+        <div class="sk sk-block sk-line" style="width:40%; height:12px;"></div>
+        <div class="sk sk-block sk-temp"></div>
+        <div class="sk sk-block sk-line" style="width:50%;"></div>
+        <div class="sk sk-block sk-card"></div>
+        <div class="sk sk-block sk-card tall"></div>
+        <div class="sk sk-block sk-card"></div>
+      </div>
+      <p class="sr-only">Loading the latest forecast…</p>`;
   }
 
   /* ---------------- SAVED LOCATIONS ---------------- */
@@ -1399,6 +1733,69 @@
         </details>`).join('')}</div>`;
   }
 
+  // Proactive, domain-specific nudges derived purely from the forecast we
+  // already have — no extra requests, no fabricated "AI". Returns up to three
+  // prioritised cards (rain, sun/golden-hour, UV, air quality, feels-like).
+  function buildWeatherInsights(ctx){
+    const {cur, hourly, hIdx, uv, aqi, isDay, now, sunset, sunrise, hours} = ctx;
+    const out = [];
+    const fmtHour = t => new Date(t).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+
+    // Rain in the next ~12h?
+    const probs = hourly.precipitation_probability || [];
+    let rainAt = -1;
+    for(let i=hIdx+1; i<Math.min(hIdx+13, probs.length); i++){
+      if(probs[i] != null && probs[i] >= 55){ rainAt = i; break; }
+    }
+    const raining = (c)=> [51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99].includes(c);
+    if(raining(cur.weather_code)){
+      out.push({icon:ICONS.rain, title:'Rain right now', sub:'Roads may be slick — allow a little extra time.'});
+    } else if(rainAt >= 0){
+      out.push({icon:ICONS.rain, title:`Rain likely around ${fmtHour(hourly.time[rainAt])}`, sub:`About ${probs[rainAt]}% chance — worth grabbing an umbrella.`});
+    }
+
+    // Golden hour approaching (within 90 min before sunset, still daytime).
+    const minsToSunset = (sunset - now)/60000;
+    if(isDay && minsToSunset > 0 && minsToSunset <= 100){
+      out.push({icon:ICONS.clearDay, title:'Golden hour is near', sub:`Best light ${hours.goldenEvening} — a good moment for a walk.`});
+    } else if(!isDay && (now - sunrise)/60000 < -30 && (sunrise - now)/60000 <= 100 && (sunrise - now) > 0){
+      out.push({icon:ICONS.clearDay, title:'Sunrise soon', sub:`Golden light ${hours.goldenMorning}.`});
+    }
+
+    // High UV during the day.
+    if(isDay && uv != null && uv >= 6){
+      out.push({icon:ICONS.uv, title:`High UV today (${Math.round(uv)})`, sub:'Sunscreen and shade if you\'ll be out for a while.'});
+    }
+
+    // Poor air quality.
+    if(aqi != null && aqi > 100){
+      out.push({icon:ICONS.aqi, title:'Air quality is worth noting', sub:`US AQI ${aqi} — sensitive groups may want to limit time outdoors.`});
+    }
+
+    // Feels notably different from the actual temperature.
+    const diff = cur.apparent_temperature - cur.temperature_2m;
+    if(out.length < 3 && Math.abs(diff) >= (weatherState.unit==='f'?7:4)){
+      out.push({
+        icon: ICONS.humidity,
+        title: `Feels ${fmtTemp(cur.apparent_temperature)}°, ${diff<0?'cooler':'warmer'} than it reads`,
+        sub: diff<0 ? 'Wind is taking the edge off — layer up.' : 'Humidity is holding the heat in.'
+      });
+    }
+
+    return out.slice(0, 3);
+  }
+  function insightsHtml(list){
+    if(!list.length) return '';
+    return `<div class="insight-row" aria-label="Suggestions">` + list.map(it=>`
+        <div class="insight-card">
+          <span class="insight-icon">${it.icon}</span>
+          <span class="insight-body">
+            <span class="insight-title">${it.title}</span>
+            <span class="insight-sub">${it.sub}</span>
+          </span>
+        </div>`).join('') + `</div>`;
+  }
+
   function renderWeather(w, placeName, aqi, alerts){
     const cur = w.current;
     const daily = w.daily;
@@ -1492,6 +1889,8 @@
       <p class="now-cond">${weatherLabel(cur.weather_code)}</p>
       <p class="now-range">Feels like ${fmtTemp(cur.apparent_temperature)}° · H:${allHi[0]}° L:${allLo[0]}°</p>
 
+      ${insightsHtml(buildWeatherInsights({cur, hourly, hIdx, uv, aqi, isDay, now, sunset, sunrise, hours}))}
+
       <p class="section-label">Hourly</p>
       <div class="glass-card"><div class="hourly-strip">${hourlyHtml}</div></div>
 
@@ -1536,6 +1935,7 @@
       <p class="credit">Weather data by Open‑Meteo</p>
     `;
     const scrollEl = document.getElementById('weatherScroll');
+    scrollEl.setAttribute('aria-busy', 'false');
     scrollEl.innerHTML = html;
     scrollEl.classList.remove('fade-in');
     void scrollEl.offsetWidth; // restart the animation even if the same content re-renders
@@ -1564,7 +1964,7 @@
   document.getElementById('travelModeToggle').addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     travelMode = b.dataset.mode;
-    document.querySelectorAll('#travelModeToggle button').forEach(x=> x.classList.toggle('active', x===b));
+    selectSegment(document.getElementById('travelModeToggle'), x=> x===b);
     document.getElementById('sheetTimeLabel').textContent = ROUTE_PROFILES[travelMode].timeLabel;
     if(destSelected || document.getElementById('destInput').value.trim()) routeTo();
   });
@@ -2147,10 +2547,216 @@
     } else if(navigator.clipboard){
       try{
         await navigator.clipboard.writeText(text);
-        showNavBanner('Trip details copied to clipboard.');
-        setTimeout(()=> showNavBanner(''), 2500);
-      }catch(e){ showNavBanner("Couldn't copy trip details."); }
+        toast('Trip details copied to clipboard.', 'success');
+      }catch(e){ toast("Couldn't copy trip details.", 'error'); }
     }
+  });
+
+  /* ---------------- SHARED: OPEN WEATHER FOR A PLACE ---------------- */
+  function openWeatherForPlace(sel){
+    weatherState.lat = sel.lat; weatherState.lon = sel.lon; weatherState.place = sel.short;
+    showView('weather');
+    addLocationEntry(sel.lat, sel.lon, sel.short);
+    showWeatherSkeleton();
+    fetchWeather(sel.lat, sel.lon, sel.short);
+  }
+
+  /* ---------------- COMMAND PALETTE ---------------- */
+  // A single keyboard-first surface (Ctrl/⌘+K) to jump between views, flip
+  // settings, or search a place — Sonder's answer to the "one or two clicks
+  // to anywhere" goal. Place results reuse the same geocoder as the search
+  // boxes, so typing a city loads its weather directly.
+  const cmdOverlay = document.getElementById('cmdOverlay');
+  const cmdInput   = document.getElementById('cmdInput');
+  const cmdList    = document.getElementById('cmdList');
+  let cmdActive = 0, cmdCurrent = [], cmdSearchToken = 0;
+
+  const NAV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>';
+  const GEAR_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+  const KEY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>';
+
+  function baseCommands(){
+    return [
+      {icon:ICONS.clearDay,  label:'Home',            hint:'View',     kw:'home start overview', run:()=>showView('home')},
+      {icon:ICONS.partlyDay, label:'Weather forecast', hint:'View',    kw:'weather forecast temperature rain', run:()=>showView('weather')},
+      {icon:NAV_ICON,        label:'Navigate & directions', hint:'View', kw:'navigate directions map route drive', run:()=>showView('nav')},
+      {icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9s1.3-6.4 3.8-9z"/></svg>', label:'World Sky', hint:'View', kw:'world sky day night globe clock', run:()=>showView('sky')},
+      {icon:ICONS.clearDay,  label:'Use my location',  hint:'Weather', kw:'locate gps current location my', run:()=>{ showView('weather'); if(!weatherState.loading) initWeather(); }},
+      {icon:GEAR_ICON,       label:'Open settings',    hint:'App',     kw:'settings preferences options', run:openSettings},
+      {icon:ICONS.uv,        label:'Units: switch to °F', hint:'Setting', kw:'fahrenheit units temperature f', run:()=>clickSeg('#unitToggle [data-unit="f"]')},
+      {icon:ICONS.uv,        label:'Units: switch to °C', hint:'Setting', kw:'celsius units temperature c', run:()=>clickSeg('#unitToggle [data-unit="c"]')},
+      {icon:ICONS.clearNight,label:'Theme: Dark',      hint:'Setting', kw:'dark theme night appearance', run:()=>clickSeg('#settingsTheme [data-theme="dark"]')},
+      {icon:ICONS.clearDay,  label:'Theme: Light',     hint:'Setting', kw:'light theme day appearance', run:()=>clickSeg('#settingsTheme [data-theme="light"]')},
+      {icon:ICONS.partlyDay, label:'Theme: Auto',      hint:'Setting', kw:'auto theme automatic appearance', run:()=>clickSeg('#settingsTheme [data-theme="auto"]')},
+      {icon:KEY_ICON,        label:'Keyboard shortcuts & tips', hint:'Help', kw:'help shortcuts keys tips onboarding', run:()=>openOnboarding(1)},
+    ];
+  }
+  function clickSeg(selector){
+    const el = document.querySelector(selector);
+    if(el) el.click();
+  }
+
+  function renderCmd(list){
+    cmdCurrent = list;
+    if(!list.length){
+      cmdList.innerHTML = `<div class="cmd-empty">No matching actions. Try a city name.</div>`;
+      return;
+    }
+    cmdList.innerHTML = list.map((c,i)=>`
+      <div class="cmd-item${i===cmdActive?' active':''}" role="option" id="cmd-opt-${i}" data-i="${i}" aria-selected="${i===cmdActive}">
+        <span class="cmd-item-icon">${c.icon||''}</span>
+        <span class="cmd-item-label">${escapeHtml(c.label)}</span>
+        ${c.hint?`<span class="cmd-item-hint">${escapeHtml(c.hint)}</span>`:''}
+      </div>`).join('');
+    cmdInput.setAttribute('aria-activedescendant', list.length?`cmd-opt-${cmdActive}`:'');
+  }
+  function filterCommands(q){
+    const query = q.trim().toLowerCase();
+    if(!query) return baseCommands();
+    return baseCommands().filter(c=> (c.label+' '+c.kw).toLowerCase().includes(query));
+  }
+  function setCmdActive(i){
+    const n = cmdCurrent.length;
+    if(!n) return;
+    cmdActive = (i + n) % n;
+    cmdList.querySelectorAll('.cmd-item').forEach((el,idx)=>{
+      const on = idx===cmdActive;
+      el.classList.toggle('active', on);
+      el.setAttribute('aria-selected', on);
+      if(on) el.scrollIntoView({block:'nearest'});
+    });
+    cmdInput.setAttribute('aria-activedescendant', `cmd-opt-${cmdActive}`);
+  }
+  function runCmd(i){
+    const c = cmdCurrent[i];
+    if(!c) return;
+    closeCmd();
+    c.run();
+  }
+  function cmdPlaceSearch(query){
+    const token = ++cmdSearchToken;
+    if(query.trim().length < 2) return;
+    searchPlaces(query.trim(), 5).then(({results})=>{
+      if(token !== cmdSearchToken || !cmdOverlay.classList.contains('show')) return;
+      if(!results || !results.length) return;
+      const placeCmds = results.map(r=>({
+        icon: ICONS.partlyDay,
+        label: `Weather in ${r.short}`,
+        hint: 'Place',
+        run: ()=> openWeatherForPlace(r)
+      }));
+      renderCmd(filterCommands(query).concat(placeCmds));
+    }).catch(()=>{ /* geocoder offline — the static actions still work */ });
+  }
+  let cmdDebounce = null;
+  function openCmd(){
+    if(cmdOverlay.classList.contains('show')) return;
+    lastFocusBeforeOverlay = document.activeElement;
+    cmdOverlay.classList.add('show');
+    cmdInput.value = '';
+    cmdActive = 0;
+    renderCmd(baseCommands());
+    setTimeout(()=> cmdInput.focus(), 20);
+  }
+  function closeCmd(){
+    if(!cmdOverlay.classList.contains('show')) return;
+    cmdOverlay.classList.remove('show');
+    cmdSearchToken++;
+    if(lastFocusBeforeOverlay && lastFocusBeforeOverlay.focus) lastFocusBeforeOverlay.focus();
+  }
+  document.getElementById('cmdBtn').addEventListener('click', openCmd);
+  cmdOverlay.addEventListener('mousedown', e=>{ if(e.target===cmdOverlay) closeCmd(); });
+  cmdInput.addEventListener('input', ()=>{
+    cmdActive = 0;
+    renderCmd(filterCommands(cmdInput.value));
+    clearTimeout(cmdDebounce);
+    cmdDebounce = setTimeout(()=> cmdPlaceSearch(cmdInput.value), 260);
+  });
+  cmdInput.addEventListener('keydown', e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); setCmdActive(cmdActive+1); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); setCmdActive(cmdActive-1); }
+    else if(e.key==='Enter'){ e.preventDefault(); runCmd(cmdActive); }
+  });
+  cmdList.addEventListener('click', e=>{
+    const item = e.target.closest('.cmd-item');
+    if(item) runCmd(parseInt(item.dataset.i, 10));
+  });
+  cmdOverlay.addEventListener('keydown', e=>{ if(e.key==='Tab') trapFocus(cmdOverlay, e); });
+
+  /* ---------------- ONBOARDING ---------------- */
+  // First-launch welcome. A localStorage flag ("have you seen this?") is the
+  // one thing we persist — it's a UI preference, not the session-only weather
+  // /navigation data the README keeps ephemeral.
+  const OB_KEY = 'sonder.onboarded.v1';
+  const obOverlay = document.getElementById('obOverlay');
+  const obNext = document.getElementById('obNext');
+  let obIndex = 0, obGoal = null;
+  function showObSlide(i){
+    obIndex = i;
+    obOverlay.querySelectorAll('.ob-slide').forEach(s=> s.classList.toggle('active', +s.dataset.slide===i));
+    obOverlay.querySelectorAll('.ob-dot').forEach(d=> d.classList.toggle('active', +d.dataset.dot===i));
+    obNext.textContent = i===0 ? 'Next' : 'Get started';
+  }
+  function openOnboarding(startIndex){
+    obGoal = null;
+    lastFocusBeforeOverlay = document.activeElement;
+    obOverlay.querySelectorAll('.ob-goal').forEach(g=> g.classList.remove('selected'));
+    showObSlide(startIndex || 0);
+    obOverlay.classList.add('show');
+    setTimeout(()=> obNext.focus(), 40);
+  }
+  function finishOnboarding(navigate){
+    obOverlay.classList.remove('show');
+    try{ localStorage.setItem(OB_KEY, '1'); }catch(e){}
+    if(navigate && obGoal){ showView(obGoal); }
+    else if(lastFocusBeforeOverlay && lastFocusBeforeOverlay.focus){ lastFocusBeforeOverlay.focus(); }
+  }
+  obOverlay.querySelectorAll('.ob-goal').forEach(g=>{
+    g.addEventListener('click', ()=>{
+      obGoal = g.dataset.goal;
+      obOverlay.querySelectorAll('.ob-goal').forEach(x=> x.classList.toggle('selected', x===g));
+      showObSlide(1);
+    });
+  });
+  obNext.addEventListener('click', ()=>{ if(obIndex===0) showObSlide(1); else finishOnboarding(true); });
+  document.getElementById('obSkip').addEventListener('click', ()=> finishOnboarding(false));
+  obOverlay.addEventListener('keydown', e=>{ if(e.key==='Tab') trapFocus(obOverlay, e); });
+
+  let seenOnboarding = true;
+  try{ seenOnboarding = !!localStorage.getItem(OB_KEY); }catch(e){ seenOnboarding = false; }
+  if(!seenOnboarding){ setTimeout(()=> openOnboarding(0), 500); }
+
+  /* ---------------- GLOBAL KEYBOARD SHORTCUTS ---------------- */
+  function isTypingTarget(el){
+    if(!el) return false;
+    const tag = el.tagName;
+    return tag==='INPUT' || tag==='TEXTAREA' || el.isContentEditable;
+  }
+  function anyOverlayOpen(){
+    return cmdOverlay.classList.contains('show') || obOverlay.classList.contains('show') || settingsOverlay.classList.contains('show');
+  }
+  const VIEW_KEYS = {h:'home', w:'weather', n:'nav', s:'sky'};
+  document.addEventListener('keydown', e=>{
+    // Command palette: Ctrl/⌘+K from anywhere.
+    if((e.metaKey || e.ctrlKey) && (e.key==='k' || e.key==='K')){
+      e.preventDefault();
+      cmdOverlay.classList.contains('show') ? closeCmd() : openCmd();
+      return;
+    }
+    // Escape closes the top-most overlay.
+    if(e.key==='Escape'){
+      if(cmdOverlay.classList.contains('show')){ e.preventDefault(); closeCmd(); }
+      else if(obOverlay.classList.contains('show')){ e.preventDefault(); finishOnboarding(false); }
+      else if(settingsOverlay.classList.contains('show')){ e.preventDefault(); closeSettings(); }
+      return;
+    }
+    if(isTypingTarget(e.target) || anyOverlayOpen() || e.metaKey || e.ctrlKey || e.altKey) return;
+    // "/" opens the palette; "?" opens the shortcuts/tips.
+    if(e.key==='/'){ e.preventDefault(); openCmd(); return; }
+    if(e.key==='?'){ e.preventDefault(); openOnboarding(1); return; }
+    // Single-key view jumps (only on the map/home level, never while typing).
+    const v = VIEW_KEYS[e.key.toLowerCase()];
+    if(v){ e.preventDefault(); showView(v); }
   });
 
 })();
