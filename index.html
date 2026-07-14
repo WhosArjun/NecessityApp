@@ -12,7 +12,16 @@
 <link rel="preconnect" href="https://geocoding-api.open-meteo.com">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="dns-prefetch" href="https://air-quality-api.open-meteo.com">
+<link rel="dns-prefetch" href="https://api.weather.gov">
+<link rel="dns-prefetch" href="https://tile.openstreetmap.org">
+<link rel="dns-prefetch" href="https://router.project-osrm.org">
+<!-- Fonts load non-render-blocking: fetch the stylesheet with media="print" so
+     it doesn't hold up first paint, then flip it to screen once it arrives.
+     A <noscript> copy keeps it working with JS disabled. -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,340..600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
 <!-- Leaflet's CSS + JS are loaded lazily, only when the Navigate view is first
      opened (see loadLeaflet()), so the home and weather screens never pay for
      the map library on startup. -->
@@ -154,6 +163,13 @@
   }
   .pill-toggle button.active{background:var(--glass-strong); color:var(--text);}
   .pill-toggle button:focus-visible{outline:2px solid var(--text); outline-offset:-2px;}
+  /* Settings sheet is always a light surface, so its toggles need fixed dark text
+     regardless of the active sky/theme (which can set --text to white). */
+  #settingsUnit button, #settingsTheme button, #settingsVoice button{color:#5b6472;}
+  #settingsUnit button.active, #settingsTheme button.active, #settingsVoice button.active{
+    background:#1B1F2A; color:#fff;
+  }
+  #settingsUnit button:focus-visible, #settingsTheme button:focus-visible, #settingsVoice button:focus-visible{outline-color:#1B1F2A;}
   #travelModeToggle{box-shadow:0 8px 20px rgba(0,0,0,.15); border-color:rgba(0,0,0,.06);}
   #travelModeToggle button{color:#8b93a1; padding:9px 13px; display:flex; align-items:center;}
   #travelModeToggle button.active{background:#1B1F2A; color:#fff;}
@@ -180,7 +196,7 @@
   }
   .alert-item summary::-webkit-details-marker{display:none;}
   .alert-item p{margin:0; padding:0 14px 12px 18px; font-size:12.5px; color:var(--text-dim); line-height:1.5;}
-  #view-weather .scroll{flex:1; overflow-y:auto; padding:6px 20px 34px; -webkit-overflow-scrolling:touch;}
+  #view-weather .scroll{flex:1; overflow-y:auto; padding:6px 20px 34px; -webkit-overflow-scrolling:touch; contain:layout paint style;}
   #view-weather .scroll.fade-in{animation:fadeInUp .45s ease;}
   @keyframes fadeInUp{from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);}}
   .loc-head{display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px;}
@@ -208,7 +224,8 @@
 
   .hourly-strip{display:flex; gap:6px; overflow-x:auto; padding:14px 10px;}
   .hourly-strip::-webkit-scrollbar{display:none;}
-  .hour-item{flex:0 0 auto; width:56px; display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .hour-item{flex:0 0 auto; width:56px; display:flex; flex-direction:column; align-items:center; gap:8px;
+    content-visibility:auto; contain-intrinsic-size:56px 72px;}
   .hour-item .h-time{font-size:12px; color:var(--text-dim); font-weight:600;}
   .hour-item svg{width:24px; height:24px;}
   .hour-item .h-temp{font-size:14.5px; font-weight:700;}
@@ -1061,7 +1078,18 @@
     }
   }
   updateClockAndGreeting();
-  setInterval(updateClockAndGreeting, 30000);
+  // Keep the clock ticking, but stop the timer entirely while the tab is
+  // hidden (no point burning wakeups in the background) and resync the moment
+  // it's visible again so the time/sky are never shown stale.
+  let clockTimer = setInterval(updateClockAndGreeting, 30000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){
+      if(clockTimer){ clearInterval(clockTimer); clockTimer = null; }
+    } else if(!clockTimer){
+      updateClockAndGreeting();
+      clockTimer = setInterval(updateClockAndGreeting, 30000);
+    }
+  });
 
   /* ---------------- UI UTILITIES ---------------- */
   // Update a segmented control: mark the matching button active and mirror
@@ -1327,9 +1355,9 @@
   // simply found nothing, which is exactly what happens for a full address.
   // So both are queried every time and merged, with address-shaped queries
   // (starting with a house number) preferring the address-capable results.
-  async function fetchOpenMeteo(query, count){
+  async function fetchOpenMeteo(query, count, signal){
     try{
-      const r = await fetchWithTimeout(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`, null, 8000);
+      const r = await fetchWithTimeout(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`, {signal}, 8000);
       if(!r.ok) return {results:[], ok:false};
       const j = await r.json();
       const results = (j.results||[]).map(res=>{
@@ -1339,9 +1367,9 @@
       return {results, ok:true};
     }catch(e){ return {results:[], ok:false}; }
   }
-  async function fetchNominatim(query, count){
+  async function fetchNominatim(query, count, signal){
     try{
-      const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=${count}`, null, 8000);
+      const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=${count}`, {signal}, 8000);
       if(!r.ok) return {results:[], ok:false};
       const j = await r.json();
       const results = j.map(item=>{
@@ -1427,17 +1455,52 @@
     return LANDMARKS.filter(p=> p.short.toLowerCase().includes(q)).slice(0, count);
   }
 
-  async function searchPlaces(query, count=6){
-    const localMatches = searchLandmarks(query, count);
-    const [om, nom] = await Promise.all([fetchOpenMeteo(query, count), fetchNominatim(query, count)]);
-    const looksLikeAddress = /^\d/.test(query.trim());
-    const liveResults = looksLikeAddress ? [...nom.results, ...om.results] : [...om.results, ...nom.results];
-    let merged = dedupePlaces([...localMatches, ...liveResults]).slice(0, count);
-    if(merged.length===0 && query.includes(',')){
-      const shortQ = query.split(',')[0].trim();
-      if(shortQ && shortQ !== query) return searchPlaces(shortQ, count);
+  // Geocoding is the app's chattiest network path (fires on every debounced
+  // keystroke in both the weather search and the command palette). A small
+  // LRU cache makes repeat queries instant, and an in-flight map collapses
+  // duplicate concurrent lookups into a single request.
+  const geocodeCache = new Map();      // key -> {results, error}
+  const geocodeInflight = new Map();   // key -> Promise
+  const GEOCODE_CACHE_MAX = 60;
+  function geocodeCacheGet(key){
+    if(!geocodeCache.has(key)) return undefined;
+    const v = geocodeCache.get(key);
+    geocodeCache.delete(key); geocodeCache.set(key, v); // bump to most-recent
+    return v;
+  }
+  function geocodeCacheSet(key, v){
+    geocodeCache.set(key, v);
+    if(geocodeCache.size > GEOCODE_CACHE_MAX) geocodeCache.delete(geocodeCache.keys().next().value);
+  }
+
+  async function searchPlaces(query, count=6, signal){
+    const key = query.trim().toLowerCase() + '|' + count;
+    const cached = geocodeCacheGet(key);
+    if(cached) return cached;
+    // Dedupe identical concurrent lookups (only when neither caller cancels,
+    // so an abortable request never shares a promise it might cancel).
+    if(!signal && geocodeInflight.has(key)) return geocodeInflight.get(key);
+
+    const run = (async ()=>{
+      const localMatches = searchLandmarks(query, count);
+      const [om, nom] = await Promise.all([fetchOpenMeteo(query, count, signal), fetchNominatim(query, count, signal)]);
+      const looksLikeAddress = /^\d/.test(query.trim());
+      const liveResults = looksLikeAddress ? [...nom.results, ...om.results] : [...om.results, ...nom.results];
+      let merged = dedupePlaces([...localMatches, ...liveResults]).slice(0, count);
+      if(merged.length===0 && query.includes(',')){
+        const shortQ = query.split(',')[0].trim();
+        if(shortQ && shortQ !== query) return searchPlaces(shortQ, count, signal);
+      }
+      const out = {results: merged, error: (!om.ok && !nom.ok && !localMatches.length) ? 'unreachable' : null};
+      if(!out.error) geocodeCacheSet(key, out); // never cache a failed/cancelled lookup
+      return out;
+    })();
+
+    if(!signal){
+      geocodeInflight.set(key, run);
+      try{ return await run; } finally { geocodeInflight.delete(key); }
     }
-    return {results: merged, error: (!om.ok && !nom.ok && !localMatches.length) ? 'unreachable' : null};
+    return run;
   }
   async function geocodeCity(q){
     const {results, error} = await searchPlaces(q, 1);
@@ -1449,7 +1512,7 @@
   // called with the chosen place object, or null whenever the person edits
   // the text (so a stale selection can't silently be used for routing).
   function attachAutocomplete(inputEl, listEl, onSelect, onSubmit){
-    let debounceTimer = null, reqId = 0, lastResults = [], highlighted = -1;
+    let debounceTimer = null, reqId = 0, lastResults = [], highlighted = -1, inflight = null;
     function hide(){ listEl.classList.remove('show'); highlighted = -1; }
     function highlight(i){
       listEl.querySelectorAll('.suggest-item').forEach((el,idx)=> el.classList.toggle('hi', idx===i));
@@ -1494,11 +1557,16 @@
       onSelect(null);
       const q = inputEl.value.trim();
       clearTimeout(debounceTimer);
+      if(inflight){ inflight.abort(); inflight = null; }
       if(q.length < 2){ hide(); return; }
       debounceTimer = setTimeout(async ()=>{
         const myReq = ++reqId;
-        const {results} = await searchPlaces(q, 6);
-        render(results, myReq);
+        const controller = new AbortController();
+        inflight = controller;
+        try{
+          const {results} = await searchPlaces(q, 6, controller.signal);
+          render(results, myReq);
+        }catch(e){ /* aborted or failed — a newer keystroke will render */ }
       }, 300);
     });
     inputEl.addEventListener('keydown', e=>{
@@ -1670,7 +1738,15 @@
   function fetchWithTimeout(url, opts, ms=10000){
     const controller = new AbortController();
     const timer = setTimeout(()=> controller.abort(), ms);
-    return fetch(url, {...(opts||{}), signal: controller.signal}).finally(()=> clearTimeout(timer));
+    // Honour a caller-supplied signal too, so a superseded request (e.g. an
+    // outdated autocomplete keystroke) cancels the in-flight network call
+    // instead of just having its response ignored.
+    const {signal: ext, ...rest} = opts || {};
+    if(ext){
+      if(ext.aborted) controller.abort();
+      else ext.addEventListener('abort', ()=> controller.abort(), {once:true});
+    }
+    return fetch(url, {...rest, signal: controller.signal}).finally(()=> clearTimeout(timer));
   }
 
   // Both of these are "nice to have" add-ons to the core forecast — each is
@@ -1693,7 +1769,26 @@
     }catch(e){ return []; } // NWS only covers the US — elsewhere this just quietly returns nothing
   }
 
-  async function fetchWeather(lat, lon, placeName){
+  // A forecast doesn't change second-to-second, so a short TTL cache keyed by
+  // rounded coordinates means revisiting a place (view switches, command
+  // palette, back-and-forth) renders instantly instead of re-hitting three
+  // APIs every time.
+  const weatherCache = new Map(); // key -> {ts, w, aqi, alerts}
+  const WEATHER_TTL = 10*60*1000;
+  const weatherKey = (lat, lon)=> lat.toFixed(2) + ',' + lon.toFixed(2);
+
+  async function fetchWeather(lat, lon, placeName, force){
+    const key = weatherKey(lat, lon);
+    const hit = weatherCache.get(key);
+    if(!force && hit && (Date.now() - hit.ts) < WEATHER_TTL){
+      weatherState.data = hit.w;
+      weatherState.aqi = hit.aqi;
+      weatherState.alerts = hit.alerts;
+      weatherState.loaded = true;
+      weatherState.loading = false;
+      renderWeather(hit.w, placeName, hit.aqi, hit.alerts);
+      return;
+    }
     weatherState.loading = true;
     try{
       const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`+
@@ -1710,6 +1805,7 @@
       if(!wRes.ok) throw new Error('forecast request failed');
       const w = await wRes.json();
 
+      weatherCache.set(key, {ts: Date.now(), w, aqi, alerts});
       weatherState.data = w;
       weatherState.aqi = aqi;
       weatherState.alerts = alerts;
@@ -1942,7 +2038,7 @@
     scrollEl.classList.add('fade-in');
     document.getElementById('weatherRefreshBtn').addEventListener('click', function(){
       this.classList.add('spinning');
-      fetchWeather(weatherState.lat, weatherState.lon, weatherState.place);
+      fetchWeather(weatherState.lat, weatherState.lon, weatherState.place, true);
     });
     updateHomeCardPreview(cur.temperature_2m, cur.weather_code, isDay);
   }
@@ -2633,10 +2729,13 @@
     closeCmd();
     c.run();
   }
+  let cmdInflight = null;
   function cmdPlaceSearch(query){
     const token = ++cmdSearchToken;
+    if(cmdInflight){ cmdInflight.abort(); cmdInflight = null; }
     if(query.trim().length < 2) return;
-    searchPlaces(query.trim(), 5).then(({results})=>{
+    cmdInflight = new AbortController();
+    searchPlaces(query.trim(), 5, cmdInflight.signal).then(({results})=>{
       if(token !== cmdSearchToken || !cmdOverlay.classList.contains('show')) return;
       if(!results || !results.length) return;
       const placeCmds = results.map(r=>({
@@ -2662,6 +2761,7 @@
     if(!cmdOverlay.classList.contains('show')) return;
     cmdOverlay.classList.remove('show');
     cmdSearchToken++;
+    if(cmdInflight){ cmdInflight.abort(); cmdInflight = null; }
     if(lastFocusBeforeOverlay && lastFocusBeforeOverlay.focus) lastFocusBeforeOverlay.focus();
   }
   document.getElementById('cmdBtn').addEventListener('click', openCmd);
