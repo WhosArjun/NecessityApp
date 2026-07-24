@@ -103,6 +103,7 @@
     background:radial-gradient(circle, rgba(255,255,255,.9), rgba(255,255,255,0) 70%);
     filter:blur(2px); opacity:.65; pointer-events:none; transition:top 1.4s ease, left 1.4s ease, opacity 1.4s ease;
   }
+  #weatherFx{position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.85; transition:opacity .6s ease;}
 
   .view{
     position:absolute; inset:0; display:flex; flex-direction:column; z-index:1;
@@ -224,11 +225,24 @@
 
   .hourly-strip{display:flex; gap:6px; overflow-x:auto; padding:14px 10px;}
   .hourly-strip::-webkit-scrollbar{display:none;}
-  .hour-item{flex:0 0 auto; width:56px; display:flex; flex-direction:column; align-items:center; gap:8px;
-    content-visibility:auto; contain-intrinsic-size:56px 72px;}
+  .hour-item{
+    flex:0 0 auto; width:56px; display:flex; flex-direction:column; align-items:center; gap:8px;
+    content-visibility:auto; contain-intrinsic-size:56px 72px;
+    border:0; background:none; padding:4px 2px; border-radius:12px; color:inherit; transition:background .18s ease, transform .15s ease;
+  }
+  .hour-item:hover{background:rgba(255,255,255,.14);}
+  .hour-item:active{transform:scale(.94);}
+  .hour-item.scrub-active{background:var(--glass-strong); box-shadow:0 0 0 1.5px var(--glass-border) inset;}
   .hour-item .h-time{font-size:12px; color:var(--text-dim); font-weight:600;}
   .hour-item svg{width:24px; height:24px;}
   .hour-item .h-temp{font-size:14.5px; font-weight:700;}
+  .scrub-banner{
+    display:none; align-items:center; justify-content:center; gap:8px; margin:2px 0 4px; padding:8px 14px;
+    border-radius:999px; background:var(--glass-strong); font-size:12.5px; font-weight:700; color:var(--text);
+    width:fit-content; margin-left:auto; margin-right:auto;
+  }
+  .scrub-banner.show{display:flex;}
+  .scrub-banner button{border:0; background:none; color:var(--accent); font-weight:700; font-size:12.5px; padding:0;}
 
   .daily-list{display:flex; flex-direction:column;}
   .day-row{display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid rgba(120,120,140,.14);}
@@ -371,6 +385,8 @@
     display:flex; align-items:center; justify-content:center; color:#1B1F2A;
   }
   .locate-btn svg{width:20px; height:20px;}
+  #radarBtn[aria-pressed="true"]{background:#3B82F6; color:#fff;}
+  #radarBtn.loading svg{animation:spin 1s linear infinite;}
   .nav-sheet{
     position:absolute; left:0; right:0; bottom:0; z-index:6; transform:translateY(110%);
     transition:transform .32s cubic-bezier(.2,.8,.3,1);
@@ -602,6 +618,7 @@
   <div class="glow" id="glow"></div>
   <div class="phone" id="phone">
     <div class="sky" id="sky"><div class="sun" id="sunGlow"></div></div>
+    <canvas id="weatherFx" aria-hidden="true"></canvas>
 
     <!-- HOME -->
     <section class="view active" id="view-home" aria-label="Home">
@@ -751,6 +768,9 @@
           </button>
         </div>
       </div>
+      <button class="locate-btn" id="radarBtn" style="bottom:202px;" aria-label="Toggle live rain radar" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15h9a3.7 3.7 0 0 0 .5-7.36A5.1 5.1 0 0 0 7 7.6 3.5 3.5 0 0 0 7 15z"/><path d="M8 17l-1.5 3M12.5 17L11 20M17 17l-1.5 3"/></svg>
+      </button>
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
@@ -1018,6 +1038,137 @@
     glow.style.left = x+'%';
     glow.style.top = y+'%';
   }
+
+  /* ---------------- AMBIENT WEATHER FX ---------------- */
+  // A lightweight canvas layer behind every screen that visually matches
+  // whatever condition is currently loaded — rain actually falls, snow
+  // actually drifts, sun rays actually shimmer. Pure canvas particles, no
+  // network calls, so — like the moon phase math — this can never break
+  // anything else; worst case it just doesn't draw.
+  const fx = {canvas:null, ctx:null, particles:[], mode:'none', w:0, h:0, dpr:1, raf:null, lastT:0, windPhase:0};
+  function fxCategoryFromCode(code){
+    if(code == null) return 'none';
+    const cat = weatherCategory(code);
+    if(cat === 'rain' || cat === 'drizzle') return 'rain';
+    if(cat === 'thunder') return 'storm';
+    if(cat === 'snow') return 'snow';
+    if(cat === 'fog') return 'fog';
+    if(cat === 'clear') return 'sun';
+    return 'none';
+  }
+  function fxResize(){
+    if(!fx.canvas) return;
+    const stage = document.getElementById('phone');
+    fx.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    fx.w = stage.clientWidth; fx.h = stage.clientHeight;
+    fx.canvas.width = Math.round(fx.w * fx.dpr);
+    fx.canvas.height = Math.round(fx.h * fx.dpr);
+    fx.canvas.style.width = fx.w + 'px';
+    fx.canvas.style.height = fx.h + 'px';
+    fx.ctx.setTransform(fx.dpr, 0, 0, fx.dpr, 0, 0);
+    fxSeed();
+  }
+  function fxCount(){
+    if(fx.mode === 'rain') return 90;
+    if(fx.mode === 'storm') return 110;
+    if(fx.mode === 'snow') return 70;
+    if(fx.mode === 'fog') return 6;
+    if(fx.mode === 'sun') return 10;
+    return 0;
+  }
+  function fxSeed(){
+    const n = fxCount();
+    fx.particles = [];
+    for(let i=0; i<n; i++) fx.particles.push(fxSpawn(true));
+  }
+  function fxSpawn(initial){
+    const w = fx.w, h = fx.h;
+    if(fx.mode === 'rain' || fx.mode === 'storm'){
+      return {x: Math.random()*w, y: initial ? Math.random()*h : -20, len: 14 + Math.random()*18,
+              speed: 720 + Math.random()*420, drift: fx.mode==='storm' ? -60 : -25};
+    }
+    if(fx.mode === 'snow'){
+      return {x: Math.random()*w, y: initial ? Math.random()*h : -10, r: 1.4 + Math.random()*2.6,
+              speed: 24 + Math.random()*38, sway: Math.random()*Math.PI*2, swaySpeed: 0.6 + Math.random()*0.8};
+    }
+    if(fx.mode === 'fog'){
+      return {x: Math.random()*w*1.4 - w*0.2, y: h*0.25 + Math.random()*h*0.55,
+              r: 90 + Math.random()*130, speed: 5 + Math.random()*8, o: 0.05 + Math.random()*0.07};
+    }
+    if(fx.mode === 'sun'){
+      return {angle: Math.random()*Math.PI*2, len: 40 + Math.random()*90, speed: (Math.random()<0.5?-1:1)*(0.05+Math.random()*0.08)};
+    }
+    return {};
+  }
+  function fxDraw(dt){
+    const ctx = fx.ctx, w = fx.w, h = fx.h;
+    ctx.clearRect(0, 0, w, h);
+    if(fx.mode === 'rain' || fx.mode === 'storm'){
+      ctx.strokeStyle = fx.mode==='storm' ? 'rgba(210,220,255,.5)' : 'rgba(220,232,255,.42)';
+      ctx.lineWidth = fx.mode==='storm' ? 1.6 : 1.2;
+      ctx.lineCap = 'round';
+      fx.particles.forEach(p=>{
+        p.y += p.speed*dt; p.x += p.drift*dt;
+        if(p.y > h+20){ Object.assign(p, fxSpawn(false)); p.y = -20; }
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.drift*0.02*p.len, p.y + p.len); ctx.stroke();
+      });
+    } else if(fx.mode === 'snow'){
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      fx.particles.forEach(p=>{
+        p.y += p.speed*dt; p.sway += p.swaySpeed*dt;
+        const px = p.x + Math.sin(p.sway)*14;
+        if(p.y > h+10){ Object.assign(p, fxSpawn(false)); p.y = -10; }
+        ctx.beginPath(); ctx.arc(px, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      });
+    } else if(fx.mode === 'fog'){
+      fx.particles.forEach(p=>{
+        p.x += p.speed*dt;
+        if(p.x - p.r > w) p.x = -p.r;
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+        g.addColorStop(0, `rgba(255,255,255,${p.o})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      });
+    } else if(fx.mode === 'sun'){
+      const cx = w*0.78, cy = h*0.14;
+      fx.windPhase += dt;
+      ctx.strokeStyle = 'rgba(255,255,255,.22)';
+      ctx.lineWidth = 2; ctx.lineCap = 'round';
+      fx.particles.forEach(p=>{
+        p.angle += p.speed*dt;
+        const flick = 0.7 + 0.3*Math.sin(fx.windPhase*2 + p.angle*3);
+        const x1 = cx + Math.cos(p.angle)*60, y1 = cy + Math.sin(p.angle)*60;
+        const x2 = cx + Math.cos(p.angle)*(60+p.len*flick), y2 = cy + Math.sin(p.angle)*(60+p.len*flick);
+        ctx.globalAlpha = 0.5*flick;
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    }
+  }
+  function fxLoop(t){
+    if(fx.mode === 'none' || document.hidden){ fx.raf = null; return; }
+    const dt = Math.min(0.05, (t - (fx.lastT||t))/1000);
+    fx.lastT = t;
+    fxDraw(dt);
+    fx.raf = requestAnimationFrame(fxLoop);
+  }
+  function setWeatherFx(code){
+    if(!fx.canvas){
+      fx.canvas = document.getElementById('weatherFx');
+      if(!fx.canvas) return;
+      fx.ctx = fx.canvas.getContext('2d');
+      fxResize();
+      window.addEventListener('resize', fxResize);
+    }
+    const mode = prefersReducedMotion() ? 'none' : fxCategoryFromCode(code);
+    if(mode === fx.mode) return;
+    fx.mode = mode;
+    fxSeed();
+    if(fx.mode !== 'none' && !fx.raf){ fx.lastT = 0; fx.raf = requestAnimationFrame(fxLoop); }
+    if(fx.mode === 'none' && fx.ctx) fx.ctx.clearRect(0, 0, fx.w, fx.h);
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && fx.mode !== 'none' && !fx.raf){ fx.lastT = 0; fx.raf = requestAnimationFrame(fxLoop); }
+  });
 
   /* ---------------- LAZY LEAFLET ---------------- */
   // Leaflet (map library + CSS) is ~150KB and only the Navigate view needs
@@ -2188,6 +2339,7 @@
     if(Math.abs(now - sunrise) < 55*60000) dawnDusk = 'dawn';
     if(Math.abs(now - sunset) < 55*60000) dawnDusk = 'dusk';
     applySky(skyForWeather(cur.weather_code, isDay, dawnDusk));
+    setWeatherFx(cur.weather_code);
     const dayProgress = Math.min(1, Math.max(0, (now - sunrise)/(sunset - sunrise)));
     positionSun(isDay ? dayProgress : (now.getHours()>12?0.85:0.1));
 
@@ -2208,11 +2360,11 @@
       const t = new Date(hourly.time[i]);
       const label = i===hIdx ? 'Now' : t.toLocaleTimeString([], {hour:'numeric'});
       const hIsDay = (t.getHours()>=6 && t.getHours()<20) ? 1 : 0;
-      hourlyHtml += `<div class="hour-item">
+      hourlyHtml += `<button type="button" class="hour-item" data-hidx="${i}" aria-label="View forecast for ${t.toLocaleTimeString([], {hour:'numeric'})}">
           <span class="h-time">${label}</span>
           ${iconFor(hourly.weather_code[i], hIsDay)}
           <span class="h-temp">${fmtTemp(hourly.temperature_2m[i])}°</span>
-        </div>`;
+        </button>`;
     }
 
     // daily list
@@ -2258,11 +2410,12 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5"/></svg>
         </button>
       </div>
-      <p class="loc-date">${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
-      <div class="now-icon">${iconFor(cur.weather_code, isDay)}</div>
-      <p class="now-temp">${fmtTemp(cur.temperature_2m)}°</p>
-      <p class="now-cond">${weatherLabel(cur.weather_code)}</p>
-      <p class="now-range">Feels like ${fmtTemp(cur.apparent_temperature)}° · H:${allHi[0]}° L:${allLo[0]}°</p>
+      <p class="loc-date" id="locDate">${now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'})}</p>
+      <div class="now-icon" id="nowIcon">${iconFor(cur.weather_code, isDay)}</div>
+      <p class="now-temp" id="nowTemp">${fmtTemp(cur.temperature_2m)}°</p>
+      <p class="now-cond" id="nowCond">${weatherLabel(cur.weather_code)}</p>
+      <p class="now-range" id="nowRange">Feels like ${fmtTemp(cur.apparent_temperature)}° · H:${allHi[0]}° L:${allLo[0]}°</p>
+      <div class="scrub-banner" id="scrubBanner"><span id="scrubBannerText"></span><button type="button" id="scrubBackBtn">Back to now</button></div>
 
       ${insightsHtml(buildWeatherInsights({cur, hourly, hIdx, uv, aqi, isDay, now, sunset, sunrise, hours}))}
 
@@ -2320,7 +2473,60 @@
       fetchWeather(weatherState.lat, weatherState.lon, weatherState.place, true);
     });
     updateHomeCardPreview(cur.temperature_2m, cur.weather_code, isDay);
+    weatherState.scrubCtx = {cur, daily, isDay, sunrise, sunset, now, dawnDusk};
+    scrubIdx = null;
   }
+
+  /* ---------------- TIME-TRAVEL SCRUBBING ---------------- */
+  // Tap any hour in the strip to preview that moment — icon, temperature,
+  // condition text, and even the ambient sky/particles shift to match. All
+  // derived from data already loaded, so scrubbing never triggers a fetch.
+  let scrubIdx = null;
+  function scrubToHour(idx){
+    const ctx = weatherState.scrubCtx;
+    if(!ctx || !weatherState.data) return;
+    const h = weatherState.data.hourly;
+    if(!h || !h.time[idx]) return;
+    scrubIdx = idx;
+    const t = new Date(h.time[idx]);
+    const code = h.weather_code[idx];
+    const temp = h.temperature_2m[idx];
+    const hIsDay = (t.getHours()>=6 && t.getHours()<20) ? 1 : 0;
+    document.getElementById('nowIcon').innerHTML = iconFor(code, hIsDay);
+    document.getElementById('nowTemp').textContent = fmtTemp(temp) + '°';
+    document.getElementById('nowCond').textContent = weatherLabel(code);
+    document.getElementById('nowRange').textContent =
+      `${t.toLocaleDateString([], {weekday:'long'})} at ${t.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}`;
+    applySky(skyForWeather(code, hIsDay, null));
+    setWeatherFx(code);
+    const banner = document.getElementById('scrubBanner');
+    if(banner){
+      banner.classList.add('show');
+      document.getElementById('scrubBannerText').textContent = 'Previewing ' + t.toLocaleTimeString([], {hour:'numeric'});
+    }
+    document.querySelectorAll('.hour-item').forEach(el=> el.classList.toggle('scrub-active', parseInt(el.dataset.hidx,10)===idx));
+  }
+  function resetScrub(){
+    const ctx = weatherState.scrubCtx;
+    scrubIdx = null;
+    document.querySelectorAll('.hour-item').forEach(el=> el.classList.remove('scrub-active'));
+    const banner = document.getElementById('scrubBanner');
+    if(banner) banner.classList.remove('show');
+    if(!ctx) return;
+    document.getElementById('nowIcon').innerHTML = iconFor(ctx.cur.weather_code, ctx.isDay);
+    document.getElementById('nowTemp').textContent = fmtTemp(ctx.cur.temperature_2m) + '°';
+    document.getElementById('nowCond').textContent = weatherLabel(ctx.cur.weather_code);
+    document.getElementById('nowRange').textContent =
+      `Feels like ${fmtTemp(ctx.cur.apparent_temperature)}° · H:${fmtTemp(ctx.daily.temperature_2m_max[0])}° L:${fmtTemp(ctx.daily.temperature_2m_min[0])}°`;
+    document.getElementById('locDate').textContent = ctx.now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+    applySky(skyForWeather(ctx.cur.weather_code, ctx.isDay, ctx.dawnDusk));
+    setWeatherFx(ctx.cur.weather_code);
+  }
+  document.getElementById('weatherScroll').addEventListener('click', e=>{
+    const hourBtn = e.target.closest('.hour-item');
+    if(hourBtn){ scrubToHour(parseInt(hourBtn.dataset.hidx, 10)); return; }
+    if(e.target.closest('#scrubBackBtn')) resetScrub();
+  });
 
   /* ---------------- NAVIGATE ---------------- */
   let map, userMarker, destMarker, routeLines = [], routesData = [], selectedRouteIdx = 0;
@@ -2539,6 +2745,62 @@
   }
 
   document.getElementById('locateBtn').addEventListener('click', ()=> locateUser());
+
+  /* ---------------- LIVE RAIN RADAR ---------------- */
+  // Real, animated precipitation radar via RainViewer's free public API
+  // (no key required). Cycles through the last several frames so you can
+  // watch precipitation actually move — purely a map overlay, so any
+  // failure here just leaves radar off rather than affecting navigation.
+  let radarOn = false, radarHost = '', radarFrames = [], radarFrameIdx = 0, radarLayer = null, radarInterval = null, radarLoaded = false;
+  async function loadRadarFrames(){
+    try{
+      const r = await fetchWithTimeout('https://api.rainviewer.com/public/weather-maps.json', null, 8000);
+      if(!r.ok) return false;
+      const j = await r.json();
+      if(!j.radar) return false;
+      radarHost = j.host || 'https://tilecache.rainviewer.com';
+      radarFrames = [...(j.radar.past || []), ...(j.radar.nowcast || [])];
+      radarLoaded = radarFrames.length > 0;
+      return radarLoaded;
+    }catch(e){ return false; }
+  }
+  function showRadarFrame(i){
+    if(!map || !radarFrames[i]) return;
+    const url = `${radarHost}${radarFrames[i].path}/256/{z}/{x}/{y}/4/1_1.png`;
+    const next = L.tileLayer(url, {opacity:0, zIndex:5, maxZoom:19});
+    next.addTo(map);
+    next.once('load', ()=>{
+      next.setOpacity(0.6);
+      if(radarLayer) map.removeLayer(radarLayer);
+      radarLayer = next;
+    });
+  }
+  function startRadarAnim(){
+    radarFrameIdx = radarFrames.length - 1; // most recent frame first
+    showRadarFrame(radarFrameIdx);
+    clearInterval(radarInterval);
+    radarInterval = setInterval(()=>{
+      radarFrameIdx = (radarFrameIdx + 1) % radarFrames.length;
+      showRadarFrame(radarFrameIdx);
+    }, 600);
+  }
+  function stopRadarAnim(){
+    clearInterval(radarInterval); radarInterval = null;
+    if(radarLayer){ map.removeLayer(radarLayer); radarLayer = null; }
+  }
+  document.getElementById('radarBtn').addEventListener('click', async function(){
+    if(!map) return;
+    radarOn = !radarOn;
+    this.setAttribute('aria-pressed', radarOn ? 'true' : 'false');
+    if(!radarOn){ stopRadarAnim(); return; }
+    if(!radarLoaded){
+      this.classList.add('loading');
+      const ok = await loadRadarFrames();
+      this.classList.remove('loading');
+      if(!ok){ radarOn = false; this.setAttribute('aria-pressed', 'false'); showNavBanner("Couldn't load live radar right now."); return; }
+    }
+    if(radarOn) startRadarAnim();
+  });
 
   function haversineMiles(lat1, lon1, lat2, lon2){
     const R = 3958.8, toRad = d=>d*Math.PI/180;
