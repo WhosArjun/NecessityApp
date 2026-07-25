@@ -30,10 +30,12 @@
     /* --- palette (sky gradient is themed at runtime) --- */
     --sky-1:#7EC8FF; --sky-2:#B9E3FF; --sky-3:#EAF6FF;
     --text:#1B1F2A; --text-dim:rgba(27,31,42,.62);
-    --glass:rgba(255,255,255,.45); --glass-border:rgba(255,255,255,.7); --glass-strong:rgba(255,255,255,.62);
+    --glass:rgba(255,252,247,.45); --glass-border:rgba(255,250,242,.72); --glass-strong:rgba(255,252,247,.64);
     --scrim: rgba(0,0,0,0);
-    /* --- semantic accents (stable across light/dark) --- */
-    --accent:#3B82F6; --accent-strong:#2563EB; --accent-soft:rgba(59,130,246,.12);
+    /* --- semantic accents (stable across light/dark) — warm terracotta,
+       in the same family as Haze's dawn/dusk glow, instead of a generic
+       SaaS blue --- */
+    --accent:#C9703E; --accent-strong:#A85A2E; --accent-soft:rgba(201,112,62,.14);
     --danger:#C24A2D; --warn:#B8862E; --success:#2E9E6B;
     --focus-ring: var(--accent);
     /* --- radii --- */
@@ -385,8 +387,17 @@
     display:flex; align-items:center; justify-content:center; color:#1B1F2A;
   }
   .locate-btn svg{width:20px; height:20px;}
-  #radarBtn[aria-pressed="true"]{background:#3B82F6; color:#fff;}
-  #radarBtn.loading svg{animation:spin 1s linear infinite;}
+  #aqiBtn[aria-pressed="true"]{background:#3B82F6; color:#fff;}
+  #aqiBtn.loading svg{animation:spin 1s linear infinite;}
+  .aqi-legend{
+    position:absolute; left:16px; bottom:20px; z-index:6; display:none; flex-direction:column; gap:4px;
+    background:rgba(255,255,255,.94); padding:10px 12px; border-radius:16px; box-shadow:0 6px 18px rgba(0,0,0,.15);
+    font-size:11px; font-weight:700; color:#4B5568;
+  }
+  .aqi-legend.show{display:flex;}
+  .aqi-legend .aqi-legend-title{font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:#8b93a1; margin-bottom:2px;}
+  .aqi-legend-scale{display:flex; align-items:center; gap:3px;}
+  .aqi-legend-scale i{width:16px; height:8px; border-radius:2px; display:block;}
   .nav-sheet{
     position:absolute; left:0; right:0; bottom:0; z-index:6; transform:translateY(110%);
     transition:transform .32s cubic-bezier(.2,.8,.3,1);
@@ -768,12 +779,16 @@
           </button>
         </div>
       </div>
-      <button class="locate-btn" id="radarBtn" style="bottom:202px;" aria-label="Toggle live rain radar" aria-pressed="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15h9a3.7 3.7 0 0 0 .5-7.36A5.1 5.1 0 0 0 7 7.6 3.5 3.5 0 0 0 7 15z"/><path d="M8 17l-1.5 3M12.5 17L11 20M17 17l-1.5 3"/></svg>
+      <button class="locate-btn" id="aqiBtn" style="bottom:202px;" aria-label="Toggle air quality map" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c0-5 3-9 8-9s8 4 8 9"/><path d="M2 21h20"/></svg>
       </button>
       <button class="locate-btn" id="locateBtn" aria-label="Use my location">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
       </button>
+      <div class="aqi-legend" id="aqiLegend">
+        <span class="aqi-legend-title">Air Quality</span>
+        <span class="aqi-legend-scale"><i style="background:#4CAF50;"></i><i style="background:#FFEB3B;"></i><i style="background:#FF9800;"></i><i style="background:#F44336;"></i><i style="background:#9C27B0;"></i><i style="background:#7E0023;"></i></span>
+      </div>
       <div class="nav-status" id="navStatus" role="status" aria-live="polite"></div>
       <div class="nav-sheet" id="navSheet">
         <div class="sheet-handle"></div>
@@ -997,16 +1012,16 @@
     if(p.light){
       root.style.setProperty('--text', '#1B1F2A');
       root.style.setProperty('--text-dim', 'rgba(27,31,42,.62)');
-      root.style.setProperty('--glass', 'rgba(255,255,255,.45)');
-      root.style.setProperty('--glass-border', 'rgba(255,255,255,.75)');
-      root.style.setProperty('--glass-strong', 'rgba(255,255,255,.65)');
+      root.style.setProperty('--glass', 'rgba(255,251,244,.48)');
+      root.style.setProperty('--glass-border', 'rgba(255,249,240,.78)');
+      root.style.setProperty('--glass-strong', 'rgba(255,251,244,.68)');
       root.style.setProperty('--scrim', 'rgba(255,255,255,0)');
     } else {
       root.style.setProperty('--text', '#FFFFFF');
       root.style.setProperty('--text-dim', 'rgba(255,255,255,.72)');
-      root.style.setProperty('--glass', 'rgba(255,255,255,.14)');
-      root.style.setProperty('--glass-border', 'rgba(255,255,255,.32)');
-      root.style.setProperty('--glass-strong', 'rgba(255,255,255,.22)');
+      root.style.setProperty('--glass', 'rgba(255,247,238,.14)');
+      root.style.setProperty('--glass-border', 'rgba(255,247,238,.32)');
+      root.style.setProperty('--glass-strong', 'rgba(255,247,238,.22)');
       root.style.setProperty('--scrim', 'rgba(0,0,0,.14)');
     }
   }
@@ -2746,60 +2761,78 @@
 
   document.getElementById('locateBtn').addEventListener('click', ()=> locateUser());
 
-  /* ---------------- LIVE RAIN RADAR ---------------- */
-  // Real, animated precipitation radar via RainViewer's free public API
-  // (no key required). Cycles through the last several frames so you can
-  // watch precipitation actually move — purely a map overlay, so any
-  // failure here just leaves radar off rather than affecting navigation.
-  let radarOn = false, radarHost = '', radarFrames = [], radarFrameIdx = 0, radarLayer = null, radarInterval = null, radarLoaded = false;
-  async function loadRadarFrames(){
-    try{
-      const r = await fetchWithTimeout('https://api.rainviewer.com/public/weather-maps.json', null, 8000);
-      if(!r.ok) return false;
-      const j = await r.json();
-      if(!j.radar) return false;
-      radarHost = j.host || 'https://tilecache.rainviewer.com';
-      radarFrames = [...(j.radar.past || []), ...(j.radar.nowcast || [])];
-      radarLoaded = radarFrames.length > 0;
-      return radarLoaded;
-    }catch(e){ return false; }
+  /* ---------------- AIR QUALITY MAP ---------------- */
+  // A real AQI overlay: samples a grid of points across the visible map in
+  // a single batched request (Open-Meteo's air-quality API accepts
+  // comma-separated lat/lons), then draws each as a soft colored circle —
+  // together they blend into a heat-map-like read of air quality across the
+  // area. Purely a map overlay; any failure just leaves it off.
+  let aqiOn = false, aqiMarkers = [], aqiMoveHandler = null, aqiDebounce = null;
+  function aqiColor(v){
+    if(v == null) return null;
+    if(v <= 50) return '#4CAF50';
+    if(v <= 100) return '#FFEB3B';
+    if(v <= 150) return '#FF9800';
+    if(v <= 200) return '#F44336';
+    if(v <= 300) return '#9C27B0';
+    return '#7E0023';
   }
-  function showRadarFrame(i){
-    if(!map || !radarFrames[i]) return;
-    const url = `${radarHost}${radarFrames[i].path}/256/{z}/{x}/{y}/4/1_1.png`;
-    const next = L.tileLayer(url, {opacity:0, zIndex:5, maxZoom:19});
-    next.addTo(map);
-    next.once('load', ()=>{
-      next.setOpacity(0.6);
-      if(radarLayer) map.removeLayer(radarLayer);
-      radarLayer = next;
-    });
+  function clearAqiLayer(){
+    aqiMarkers.forEach(m=> map.removeLayer(m));
+    aqiMarkers = [];
   }
-  function startRadarAnim(){
-    radarFrameIdx = radarFrames.length - 1; // most recent frame first
-    showRadarFrame(radarFrameIdx);
-    clearInterval(radarInterval);
-    radarInterval = setInterval(()=>{
-      radarFrameIdx = (radarFrameIdx + 1) % radarFrames.length;
-      showRadarFrame(radarFrameIdx);
-    }, 600);
-  }
-  function stopRadarAnim(){
-    clearInterval(radarInterval); radarInterval = null;
-    if(radarLayer){ map.removeLayer(radarLayer); radarLayer = null; }
-  }
-  document.getElementById('radarBtn').addEventListener('click', async function(){
+  async function loadAqiGrid(){
     if(!map) return;
-    radarOn = !radarOn;
-    this.setAttribute('aria-pressed', radarOn ? 'true' : 'false');
-    if(!radarOn){ stopRadarAnim(); return; }
-    if(!radarLoaded){
-      this.classList.add('loading');
-      const ok = await loadRadarFrames();
-      this.classList.remove('loading');
-      if(!ok){ radarOn = false; this.setAttribute('aria-pressed', 'false'); showNavBanner("Couldn't load live radar right now."); return; }
+    const b = map.getBounds();
+    const gridSize = 5;
+    const lats = [], lons = [];
+    for(let i=0; i<gridSize; i++){
+      for(let j=0; j<gridSize; j++){
+        lats.push(b.getSouth() + (b.getNorth()-b.getSouth()) * (i/(gridSize-1)));
+        lons.push(b.getWest() + (b.getEast()-b.getWest()) * (j/(gridSize-1)));
+      }
     }
-    if(radarOn) startRadarAnim();
+    try{
+      const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lats.join(',')}&longitude=${lons.join(',')}&current=us_aqi`;
+      const r = await fetchWithTimeout(url, null, 10000);
+      if(!r.ok) return;
+      const j = await r.json();
+      const rows = Array.isArray(j) ? j : [j]; // a single-point request isn't wrapped in an array
+      clearAqiLayer();
+      const cellDeg = Math.max((b.getEast()-b.getWest())/(gridSize-1), (b.getNorth()-b.getSouth())/(gridSize-1));
+      rows.forEach(row=>{
+        const v = row.current && row.current.us_aqi;
+        const color = aqiColor(v);
+        if(!color) return;
+        const circle = L.circle([row.latitude, row.longitude], {
+          radius: cellDeg * 111000 * 0.62, // approx degrees→meters, sized to blend into neighbors
+          color: 'transparent', fillColor: color, fillOpacity: 0.32, weight: 0, interactive: true
+        }).bindPopup(`US AQI ${v != null ? v : '—'}`);
+        circle.addTo(map);
+        aqiMarkers.push(circle);
+      });
+    }catch(e){ /* overlay only — fail silently */ }
+  }
+  document.getElementById('aqiBtn').addEventListener('click', async function(){
+    if(!map) return;
+    aqiOn = !aqiOn;
+    this.setAttribute('aria-pressed', aqiOn ? 'true' : 'false');
+    document.getElementById('aqiLegend').classList.toggle('show', aqiOn);
+    if(!aqiOn){
+      clearAqiLayer();
+      if(aqiMoveHandler){ map.off('moveend', aqiMoveHandler); aqiMoveHandler = null; }
+      return;
+    }
+    this.classList.add('loading');
+    await loadAqiGrid();
+    this.classList.remove('loading');
+    if(!aqiMoveHandler){
+      aqiMoveHandler = ()=>{
+        clearTimeout(aqiDebounce);
+        aqiDebounce = setTimeout(loadAqiGrid, 500);
+      };
+      map.on('moveend', aqiMoveHandler);
+    }
   });
 
   function haversineMiles(lat1, lon1, lat2, lon2){
