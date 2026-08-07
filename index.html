@@ -298,6 +298,21 @@
   .detail-value{font-family:var(--font-display); font-size:26px; font-weight:450;}
   .detail-note{font-size:12px; color:var(--text-dim);}
 
+  .assistant-card{padding:14px 14px 12px; display:flex; flex-direction:column; gap:10px; margin-top:8px;}
+  .assistant-head{display:flex; align-items:center; gap:10px;}
+  .assistant-badge{width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #f8dbe6, #f6cf96); font-size:20px; box-shadow:0 6px 16px rgba(0,0,0,.08);}
+  .assistant-title{font-size:13px; font-weight:700; color:var(--text);}
+  .assistant-sub{font-size:11.5px; color:var(--text-dim); margin-top:2px;}
+  .assistant-chat{display:flex; flex-direction:column; gap:8px;}
+  .assistant-msg{padding:10px 12px; border-radius:14px; font-size:12.5px; line-height:1.45; max-width:88%;}
+  .assistant-msg.bot{background:rgba(255,255,255,.7); color:var(--text); align-self:flex-start;}
+  .assistant-msg.user{background:var(--accent-soft); color:var(--text); align-self:flex-end;}
+  .assistant-form{display:flex; gap:8px; align-items:center;}
+  .assistant-form input{flex:1; border:1px solid rgba(120,120,140,.16); background:rgba(255,255,255,.7); border-radius:999px; padding:10px 12px; font-size:12.5px; color:var(--text); outline:none;}
+  .assistant-form button{border:0; border-radius:999px; background:var(--accent); color:#fff; padding:9px 12px; font-size:12px; font-weight:700;}
+  .assistant-suggestions{display:flex; flex-wrap:wrap; gap:8px;}
+  .assistant-suggestion{border:0; border-radius:999px; padding:7px 10px; background:rgba(255,255,255,.7); color:var(--text-dim); font-size:11px; font-weight:600;}
+
   .credit{text-align:center; font-size:11px; color:var(--text-dim); margin-top:22px;}
 
   .center-msg{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:0 40px; text-align:center;}
@@ -837,6 +852,23 @@
           <div class="tbt-dash" id="tbtDash"><b id="tbtSpeed">--</b> mph · ETA <b id="tbtEtaTime">—</b></div>
           <button class="tbt-start-btn" id="tbtStartBtn">Start Navigation</button>
         </div>
+      </div>
+
+      <!-- GPS ASSISTANT PANEL -->
+      <div class="assistant-card" id="navAssistantCard" style="position:fixed; bottom:20px; right:20px; width:280px; max-height:400px; border-radius:14px; display:none; flex-direction:column;">
+        <div class="assistant-badge">🐼</div>
+        <div class="assistant-chat" id="navAssistantChat" style="flex:1; overflow-y:auto; padding:8px 0; gap:4px;"></div>
+        <div class="assistant-suggestions" id="navAssuggestions" style="display:flex; flex-wrap:wrap; gap:6px; padding:0 8px 8px 8px;">
+          <button type="button" class="assistant-suggestion" data-prompt="Is this a good time to travel?">Good time?</button>
+          <button type="button" class="assistant-suggestion" data-prompt="What activities are nearby?">Activities?</button>
+          <button type="button" class="assistant-suggestion" data-prompt="Any weather concerns?">Weather OK?</button>
+        </div>
+        <form class="assistant-form" id="navAssistantForm" style="display:flex; gap:6px; padding:8px; border-top: 1px solid rgba(255,255,255,0.3);">
+          <input type="text" id="navAssistantInput" class="assistant-input" placeholder="Ask about the route or area..." style="flex:1; padding:6px 10px; border:1px solid rgba(255,255,255,0.3); border-radius:20px; background:rgba(255,255,255,0.1); color:inherit; font-size:13px;" autocomplete="off">
+          <button type="submit" class="assistant-btn" aria-label="Send" style="padding:6px 12px; border:none; border-radius:50%; background:rgba(255,255,255,0.2); cursor:pointer; display:flex; align-items:center; justify-content:center; color:inherit; font-weight:500;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </form>
       </div>
     </section>
 
@@ -2475,6 +2507,29 @@
         <div class="glass-card detail-card"><span class="detail-top">${ICONS.visibility} Visibility</span><span class="detail-value">${visUnit(visM)} <span style="font-size:15px;">${visUnitLabel()}</span></span><span class="detail-note">${visM>8000?'Clear conditions':'Reduced'}</span></div>
         <div class="glass-card detail-card"><span class="detail-top">${ICONS.aqi} Air Quality</span><span class="detail-value">${aqi!=null?aqi:'—'}</span><span class="detail-note">${aq.label}${aqi!=null?'':' (unavailable)'}</span></div>
       </div>
+
+      <div class="glass-card assistant-card" aria-label="Weather assistant">
+        <div class="assistant-head">
+          <div class="assistant-badge">🐼</div>
+          <div>
+            <div class="assistant-title">Panda Weather</div>
+            <div class="assistant-sub">Ask me anything about today’s sky</div>
+          </div>
+        </div>
+        <div class="assistant-chat" id="assistantChat">
+          <div class="assistant-msg bot">Hi! I can help with outfits, rain plans, and what to expect outside.</div>
+        </div>
+        <div class="assistant-suggestions">
+          <button type="button" class="assistant-suggestion" data-prompt="Should I bring an umbrella today?">Umbrella?</button>
+          <button type="button" class="assistant-suggestion" data-prompt="What should I wear today?">What to wear</button>
+          <button type="button" class="assistant-suggestion" data-prompt="Will it rain later?">Rain later?</button>
+        </div>
+        <form class="assistant-form" id="assistantForm">
+          <input id="assistantInput" type="text" placeholder="Ask about the weather…" autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+
       <p class="credit">Weather data by Open‑Meteo</p>
     `;
     const scrollEl = document.getElementById('weatherScroll');
@@ -2487,9 +2542,144 @@
       this.classList.add('spinning');
       fetchWeather(weatherState.lat, weatherState.lon, weatherState.place, true);
     });
+
+    const assistantForm = document.getElementById('assistantForm');
+    if(assistantForm){
+      assistantForm.addEventListener('submit', function(e){
+        e.preventDefault();
+        const input = document.getElementById('assistantInput');
+        const chat = document.getElementById('assistantChat');
+        if(!input || !chat) return;
+        const text = input.value.trim();
+        if(!text) return;
+        const bubbleUser = document.createElement('div');
+        bubbleUser.className = 'assistant-msg user';
+        bubbleUser.textContent = text;
+        chat.appendChild(bubbleUser);
+        input.value = '';
+        const reply = document.createElement('div');
+        reply.className = 'assistant-msg bot';
+        reply.textContent = buildAssistantReply(text, {temp: cur.temperature_2m, feels: cur.apparent_temperature, wind: cur.wind_speed_10m, rain: hourly.precipitation_probability[hIdx], code: cur.weather_code, isDay});
+        chat.appendChild(reply);
+        chat.scrollTop = chat.scrollHeight;
+      });
+
+      document.querySelectorAll('.assistant-suggestion').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const input = document.getElementById('assistantInput');
+          if(input){ input.value = btn.getAttribute('data-prompt'); input.focus(); }
+        });
+      });
+    }
+
     updateHomeCardPreview(cur.temperature_2m, cur.weather_code, isDay);
     weatherState.scrubCtx = {cur, daily, isDay, sunrise, sunset, now, dawnDusk};
     scrubIdx = null;
+  }
+
+  /* ---------------- NAVIGATION ASSISTANT SETUP ---------------- */
+  const navAssistantForm = document.getElementById('navAssistantForm');
+  if(navAssistantForm){
+    // Wrap showView to manage assistant visibility
+    const views = {home:'view-home', weather:'view-weather', nav:'view-nav', worldSky:'view-sky'};
+    const origShowView = window.showView;
+    window.showView = function(name){
+      origShowView(name);
+      const navCard = document.getElementById('navAssistantCard');
+      if(navCard) navCard.style.display = (name === 'nav') ? 'flex' : 'none';
+    };
+
+    navAssistantForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      const input = document.getElementById('navAssistantInput');
+      const chat = document.getElementById('navAssistantChat');
+      if(!input || !chat) return;
+      const text = input.value.trim();
+      if(!text) return;
+      
+      const bubbleUser = document.createElement('div');
+      bubbleUser.className = 'assistant-msg user';
+      bubbleUser.textContent = text;
+      chat.appendChild(bubbleUser);
+      input.value = '';
+      
+      // Build context from current weather
+      let ctx = {temp: 72, feels: 70, wind: 5, rain: 20, code: 0, isDay: true};
+      if(weatherState && weatherState.data){
+        const cur = weatherState.data.current;
+        const hourly = weatherState.data.hourly;
+        const now = new Date();
+        const hIdx = Math.floor((now - new Date(weatherState.data.hourly.time[0])) / 3600000);
+        const isDay = (now.getHours()>=6 && now.getHours()<20) ? 1 : 0;
+        ctx = {temp: cur.temperature_2m, feels: cur.apparent_temperature, wind: cur.wind_speed_10m, rain: hourly.precipitation_probability[hIdx] || 20, code: cur.weather_code, isDay};
+      }
+      
+      const reply = document.createElement('div');
+      reply.className = 'assistant-msg bot';
+      reply.textContent = buildAssistantReply(text, ctx);
+      chat.appendChild(reply);
+      chat.scrollTop = chat.scrollHeight;
+    });
+
+    document.querySelectorAll('#navAssuggestions .assistant-suggestion').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const input = document.getElementById('navAssistantInput');
+        if(input){ input.value = btn.getAttribute('data-prompt'); input.focus(); }
+      });
+    });
+  }
+
+    function buildAssistantReply(text, ctx){
+    const t = text.toLowerCase();
+    const hasRain = ctx.rain != null && ctx.rain >= 55;
+    const isCool = ctx.temp < 15;
+    const isWarm = ctx.temp >= 25;
+    const isNice = ctx.temp >= 18 && ctx.temp < 28 && !hasRain;
+
+    // Where to go / Activity suggestions
+    if(t.includes('where') || t.includes('go') || t.includes('place') || t.includes('activity') || t.includes('do')){
+      if(hasRain) return '🌧️ Rains on the way! Perfect for an indoor cafe, museum, movie, or cozy bookstore. Or a brisk walk with a jacket.';
+      if(isWarm) return '☀️ Warm and nice - great for parks, outdoor markets, hiking, or exploring. Bring water and sunscreen!';
+      if(isNice) return '🌤️ Perfect conditions for almost anything! Parks, cafes, shopping, scenic walk. Youve got it made!';
+      if(isCool) return '❄️ Chilly, so indoor galleries, cafes, or restaurants are ideal. But brisk outdoor walks are refreshing too!';
+    }
+
+    // Umbrella / Rain checks
+    if(t.includes('umbrella') || (t.includes('rain') && !t.includes('where'))){
+      return hasRain
+        ? `☔ Yep - rain looks likely with about ${ctx.rain}% chance. Bring an umbrella, or plan something indoors.`
+        : 'Looks dry right now, so youre good without one. Check the hourly forecast just in case!';
+    }
+
+    // Clothing / Outfit
+    if(t.includes('wear') || t.includes('outfit') || t.includes('clothes')){
+      if(isWarm) return '👕 Light, breathable clothes - t-shirt or summer dress. Sunscreen and a hat if youre out for hours!';
+      if(isNice) return '👔 A light layer or sweater should be perfect. The weather is just right for a casual outfit.';
+      if(isCool) return '🧥 Layer up! A jacket or hoodie would feel great. Jeans and a cozy sweater combo.';
+      return `It feels around ${fmtTemp(ctx.feels)}, so dress in layers you can adjust.`;
+    }
+
+    // Wind
+    if(t.includes('wind') || t.includes('breezy')){
+      const windStr = Math.round(ctx.wind);
+      if(ctx.wind > 20) return `💨 Pretty strong at ${windStr} ${windUnitLabel()} - might be a windy walk, but its refreshing!`;
+      if(ctx.wind > 10) return `🌬️ Nice breeze at ${windStr} ${windUnitLabel()} - perfect for kite flying or outdoor cafe.`;
+      return `✨ Wind is calm at around ${windStr} ${windUnitLabel()} - barely noticeable.`;
+    }
+
+    // General vibes
+    if(t.includes('vibe') || t.includes('mood') || t.includes('day')){
+      if(isNice) return '✨ Shaping up to be a beautiful day! Get outside and enjoy it.';
+      if(hasRain) return '🎬 Cozy kind of day - perfect for indoor adventures or rain-watching with a warm drink.';
+      if(isCool) return '⚡ Crisp, energizing day. Great for an active outing or just feeling refreshed.';
+      return '🌍 Average weather-wise, but you can make your own adventure!';
+    }
+
+    // Default helpful response
+    if(isNice){
+      return `Its ${fmtTemp(ctx.temp)} and feels like ${fmtTemp(ctx.feels)} - some of the nicest weather you could ask for! ☀️`;
+    }
+    return `It's ${fmtTemp(ctx.temp)} and feels like ${fmtTemp(ctx.feels)}. Check the hourly forecast to plan ahead! 📍`;
   }
 
   /* ---------------- TIME-TRAVEL SCRUBBING ---------------- */

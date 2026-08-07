@@ -1,0 +1,69 @@
+// Add this code after the weather assistant setup (around line 2570) to initialize the navigation assistant
+
+// NAVIGATION ASSISTANT SETUP
+const navAssistantForm = document.getElementById('navAssistantForm');
+if(navAssistantForm){
+  // Show assistant when entering nav view
+  const originalShowView = window.showView;
+  window.showView = function(name){
+    originalShowView(name);
+    const navCard = document.getElementById('navAssistantCard');
+    if(navCard){
+      navCard.style.display = (name === 'nav') ? 'flex' : 'none';
+      if(name === 'nav'){
+        // Clear previous messages when entering nav
+        const chat = document.getElementById('navAssistantChat');
+        if(chat) chat.innerHTML = '';
+      }
+    }
+  };
+
+  navAssistantForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    const input = document.getElementById('navAssistantInput');
+    const chat = document.getElementById('navAssistantChat');
+    if(!input || !chat) return;
+    const text = input.value.trim();
+    if(!text) return;
+    
+    const bubbleUser = document.createElement('div');
+    bubbleUser.className = 'assistant-msg user';
+    bubbleUser.textContent = text;
+    chat.appendChild(bubbleUser);
+    input.value = '';
+    
+    // Build context from current weather if available
+    let ctx = {temp: 72, feels: 70, wind: 5, rain: 20, code: 0, isDay: true};
+    if(weatherState && weatherState.data){
+      const cur = weatherState.data.current;
+      const hourly = weatherState.data.hourly;
+      const now = new Date();
+      const hIdx = Math.floor((now - new Date(weatherState.data.hourly.time[0])) / 3600000);
+      const isDay = (now.getHours()>=6 && now.getHours()<20) ? 1 : 0;
+      ctx = {
+        temp: cur.temperature_2m,
+        feels: cur.apparent_temperature,
+        wind: cur.wind_speed_10m,
+        rain: hourly.precipitation_probability[hIdx] || 20,
+        code: cur.weather_code,
+        isDay
+      };
+    }
+    
+    const reply = document.createElement('div');
+    reply.className = 'assistant-msg bot';
+    reply.textContent = buildAssistantReply(text, ctx);
+    chat.appendChild(reply);
+    chat.scrollTop = chat.scrollHeight;
+  });
+
+  document.querySelectorAll('#navAssuggestions .assistant-suggestion').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const input = document.getElementById('navAssistantInput');
+      if(input){ 
+        input.value = btn.getAttribute('data-prompt');
+        input.focus();
+      }
+    });
+  });
+}
