@@ -1318,6 +1318,14 @@
   document.getElementById('weatherBack').addEventListener('click', ()=> showView('home'));
   document.getElementById('navBack').addEventListener('click', ()=> showView('home'));
 
+  /* WRAP showView TO MANAGE NAV ASSISTANT VISIBILITY */
+  const origShowView = showView;
+  window.showView = function(name){
+    origShowView(name);
+    const navCard = document.getElementById('navAssistantCard');
+    if(navCard) navCard.style.display = (name === 'nav') ? 'flex' : 'none';
+  };
+
   /* ---------------- WEATHER STATE ---------------- */
   const weatherState = {loaded:false, loading:false, unit:'f', lat:null, lon:null, data:null, place:'Your Location'};
   let themeOverride = 'auto'; // 'auto' | 'light' | 'dark' — set from Settings
@@ -2580,15 +2588,6 @@
   /* ---------------- NAVIGATION ASSISTANT SETUP ---------------- */
   const navAssistantForm = document.getElementById('navAssistantForm');
   if(navAssistantForm){
-    // Wrap showView to manage assistant visibility
-    const views = {home:'view-home', weather:'view-weather', nav:'view-nav', worldSky:'view-sky'};
-    const origShowView = window.showView;
-    window.showView = function(name){
-      origShowView(name);
-      const navCard = document.getElementById('navAssistantCard');
-      if(navCard) navCard.style.display = (name === 'nav') ? 'flex' : 'none';
-    };
-
     navAssistantForm.addEventListener('submit', function(e){
       e.preventDefault();
       const input = document.getElementById('navAssistantInput');
